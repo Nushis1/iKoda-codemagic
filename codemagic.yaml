@@ -1,0 +1,193 @@
+# Codemagic: zastępuje dawny .github/workflows/build.yml.
+#
+# Dwa workflowy, tak jak dwa joby w GitHub Actions:
+#   ios-unsigned  testy KodaCore + niepodpisany Koda.ipa (do AltStore / SideStore / Sideloadly)
+#   mac-universal uniwersalny (arm64 + x86_64) Koda.dmg, podpisany ad-hoc (Mac Catalyst)
+#   ios-signed    PODPISANY Koda.ipa (Ad Hoc) do instalacji prosto na zarejestrowane iPhone'y.
+#                 Uruchamiany RĘCZNIE; wymaga płatnego Apple Developer Program (patrz niżej).
+#
+# ios-unsigned i mac-universal nie potrzebują żadnych sekretów (iOS bez podpisu, Mac z podpisem
+# ad-hoc "-"). Tylko ios-signed wymaga konfiguracji podpisywania:
+#   1. Płatne konto Apple Developer Program (darmowe Apple ID nie da profilu Ad Hoc).
+#   2. Klucz App Store Connect API (App Store Connect -> Users and Access -> Integrations,
+#      rola Admin lub App Manager). W Codemagic: Team settings -> Integrations ->
+#      App Store Connect -> dodaj klucz i nazwij go dokładnie tak jak APP_STORE_CONNECT_KEY_NAME
+#      poniżej (domyślnie "Koda").
+#   3. Grupa zmiennych "code-signing" z sekretem CERTIFICATE_PRIVATE_KEY: prywatny klucz RSA
+#      do certyfikatu dystrybucyjnego, wygenerowany lokalnie:
+#        ssh-keygen -t rsa -b 2048 -m PEM -f cm_cert_key -q -N ""
+#      i wklejony jako zawartość pliku cm_cert_key (cały, z liniami BEGIN/END) jako sekret.
+#   4. UDID-y iPhone'ów zarejestrowane w Apple Developer -> Devices. Profil Ad Hoc obejmuje
+#      tylko urządzenia zarejestrowane PRZED jego wygenerowaniem (nowe urządzenie = nowy build,
+#      Codemagic sam odświeży profil).
+#
+# Uruchomienie: w Codemagic dodaj repozytorium (Add application -> wybierz repo ->
+# "codemagic.yaml"), potem w ustawieniach aplikacji kliknij "Create webhook".
+
+definitions:
+  triggers: &triggers
+    events:
+      - push
+      - pull_request
+    branch_patterns:
+      # push na main / beta (i PR z tych gałęzi)
+      - pattern: main
+        include: true
+        source: true
+      - pattern: beta
+        include: true
+        source: true
+      # każdy pull request (wzorzec dotyczy gałęzi docelowej PR)
+      - pattern: '*'
+        include: true
+        source: false
+    cancel_previous_builds: true
+
+workflows:
+  ios-unsigned:
+    name: iOS (unsigned .ipa)
+    labels:
+      - ios
+    # Xcode 27 ("edge"): iOS 27 SDK ma schematy audio dla nowego Siri
+    # (Koda/Intents/SiriSchemas.swift). Bez niego ten plik jest pomijany, a apka i tak się buduje.
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+    environment:
+      xcode: edge
+    triggering: *triggers
+    scripts:
+      - name: Show toolchain
+        script: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i ios
+
+      - name: Test KodaCore
+        working_directory: KodaCore
+        script: swift test
+
+      - name: Build unsigned app
+        script: |
+          # Bez pipefail job przechodzi na kodzie wyjścia `tail`, nawet gdy build się wywali.
+          set -o pipefail
+          xcodebuild -project Koda.xcodeproj -scheme Koda -configuration Release \
+            -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log | tail -n 40 \
+            || { echo "Errors:"; grep -E "error:" build.log | sort -u | head -100; exit 1; }
+
+      # .ipa bez płatnego podpisu: AltStore, SideStore i Sideloadly podmieniają podpis na ten
+      # z Apple ID instalującego. Najpierw nakładamy podpis ad-hoc ("-"), bo narzędzia do
+      # sideloadu oczekują poprawnie podpisanego (choćby ad-hoc) Mach-O, a surowy build
+      # z CODE_SIGNING_ALLOWED=NO nie ma żadnego podpisu (iOS zgłasza wtedy
+      # "No code signature found"). Rozszerzenia (PlugIns) podpisujemy przed aplikacją.
+      - name: Package .ipa
+        script: |
+          set -e
+          rm -rf Payload Koda.ipa
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Koda.app Payload/
+          APP=Payload/Koda.app
+          for f in "$APP"/Frameworks/*.framework "$APP"/Frameworks/*.dylib "$APP"/PlugIns/*.appex; do
+            [ -e "$f" ] && codesign --force --sign - "$f"
+          done
+          codesign --force --sign - "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          zip -qry Koda.ipa Payload
+          ls -lh Koda.ipa
+    artifacts:
+      - Koda.ipa
+      - build.log
+
+  # Podpisany .ipa (Ad Hoc). Codemagic sam tworzy/pobiera certyfikat i profile przez
+  # App Store Connect API, dla apki i dla rozszerzenia widgetów.
+  # Bez `triggering`: startuje tylko ręcznie (Start new build -> workflow "iOS (signed .ipa)"),
+  # żeby nie palić minut ani nie padać na każdym pushu, zanim skonfigurujesz podpisywanie.
+  ios-signed:
+    name: iOS (signed .ipa, Ad Hoc)
+    labels:
+      - ios
+      - signed
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+    integrations:
+      app_store_connect: Koda   # nazwa klucza z Codemagic -> Team settings -> Integrations
+    environment:
+      xcode: edge
+      groups:
+        - code-signing          # CERTIFICATE_PRIVATE_KEY
+      vars:
+        XCODE_PROJECT: Koda.xcodeproj
+        XCODE_SCHEME: Koda
+        BUNDLE_ID: ivors.Koda
+        WIDGETS_BUNDLE_ID: ivors.Koda.Widgets
+    scripts:
+      - name: Set up keychain
+        script: keychain initialize
+
+      - name: Test KodaCore
+        working_directory: KodaCore
+        script: swift test
+
+      # --create: jeśli bundle ID, certyfikat albo profil jeszcze nie istnieją, powstaną.
+      - name: Fetch signing files
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_ADHOC --create
+          app-store-connect fetch-signing-files "$WIDGETS_BUNDLE_ID" --type IOS_APP_ADHOC --create
+
+      - name: Add certificates to keychain
+        script: keychain add-certificates
+
+      - name: Apply provisioning profiles to the Xcode project
+        script: xcode-project use-profiles
+
+      - name: Build signed .ipa
+        script: |
+          xcode-project build-ipa \
+            --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    # Opcjonalnie: link do pobrania na maila (otwórz go w Safari na iPhonie).
+    # publishing:
+    #   email:
+    #     recipients:
+    #       - twoj@adres.pl
+
+  mac-universal:
+    name: Mac (universal .dmg)
+    labels:
+      - mac
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+    environment:
+      # Stabilny Xcode 26, jak dawny runner macos-26.
+      xcode: latest
+    triggering: *triggers
+    scripts:
+      # Jeden plik dla Apple silicon i Intela. Podpis ad-hoc: Apple silicon nie uruchamia
+      # niepodpisanego kodu, a bez Developer ID nie ma czym lepiej podpisać.
+      - name: Build universal Mac app
+        script: |
+          set -o pipefail
+          xcodebuild -project Koda.xcodeproj -scheme Koda -configuration Release \
+            -destination 'generic/platform=macOS,variant=Mac Catalyst' -derivedDataPath build \
+            ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" \
+            build 2>&1 | tee build.log | tail -n 40 \
+            || { echo "Errors:"; grep -E "error:" build.log | sort -u | head -100; exit 1; }
+          lipo -info build/Build/Products/Release-maccatalyst/Koda.app/Contents/MacOS/Koda
+
+      # Zwykły obraz dysku: Koda obok skrótu do Applications, do przeciągnięcia.
+      - name: Package .dmg
+        script: |
+          set -e
+          rm -rf dmg Koda.dmg
+          mkdir dmg
+          cp -R build/Build/Products/Release-maccatalyst/Koda.app dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname Koda -srcfolder dmg -fs APFS -format ULFO -ov Koda.dmg
+          ls -lh Koda.dmg
+    artifacts:
+      - Koda.dmg
+      - build.log

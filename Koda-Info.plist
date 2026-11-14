@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>ivors.Koda</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>koda</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Koda listens only while you search by voice.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Koda turns what you say into a search. On iPhones that support it, this happens on the device.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Koda saves lyric cards you choose to save to your photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Koda uses a photo you pick as your profile picture. It stays on this iPhone.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
+</dict>
+</plist>
