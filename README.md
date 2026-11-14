@@ -120,6 +120,7 @@ Koda has two modes, as Koda for Android does. Switch between them from the butto
 ### Your library
 
 - Liked songs, saved albums, playlists and artists, and playlists of your own
+- **Import a playlist** from Spotify or SoundCloud: tap New Playlist, choose where from, and paste the link of a public playlist; Koda finds each song on YouTube Music and lists the ones it couldn't (Spotify shows only a playlist's first 100 songs)
 - **Downloads** and **Ready Offline**: songs kept on the device as you play them, to listen without a connection
 - Listening stats: time listened each day, streaks, top songs and artists
 - Back up the whole library to one file, or import it from Koda for Android

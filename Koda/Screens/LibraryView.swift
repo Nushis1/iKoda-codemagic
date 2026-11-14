@@ -289,11 +289,18 @@ private struct NewPlaylistTile: View {
     @State private var naming = false
     @State private var draftName = ""
     @State private var created = 0
+    @State private var importing: PlaylistSource?
 
     var body: some View {
-        Button {
-            draftName = ""
-            naming = true
+        Menu {
+            Button("Create Playlist", systemImage: "plus") {
+                draftName = ""
+                naming = true
+            }
+            Section("Import from a public link") {
+                Button("Spotify", systemImage: "arrow.down.circle") { importing = .spotify }
+                Button("SoundCloud", systemImage: "arrow.down.circle") { importing = .soundCloud }
+            }
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -312,6 +319,9 @@ private struct NewPlaylistTile: View {
         }
         .buttonStyle(.plain)
         .sensoryFeedback(.success, trigger: created)
+        .sheet(item: $importing) { source in
+            ImportPlaylistView(source: source).appEnvironment(app)
+        }
         .alert("New Playlist", isPresented: $naming) {
             TextField("Name", text: $draftName)
             Button("Cancel", role: .cancel) {}
