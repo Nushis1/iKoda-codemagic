@@ -75,6 +75,23 @@ final class PlaylistImportModel {
     }
 }
 
+extension PlaylistSource {
+    /// The mark in the asset catalog: a template image, so it takes any colour.
+    var logo: String {
+        switch self {
+        case .spotify: "SpotifyMark"
+        case .soundCloud: "SoundCloudMark"
+        }
+    }
+
+    var brandColor: Color {
+        switch self {
+        case .spotify: Color(red: 0.114, green: 0.725, blue: 0.329)
+        case .soundCloud: Color(red: 1, green: 0.333, blue: 0)
+        }
+    }
+}
+
 struct ImportPlaylistView: View {
     let source: PlaylistSource
     @Environment(AppModel.self) private var app
@@ -136,6 +153,18 @@ struct ImportPlaylistView: View {
 
     private func linkSection(error: String?) -> some View {
         Group {
+            Section {
+                HStack(spacing: 14) {
+                    Image(source.logo)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 34, height: 34)
+                        .foregroundStyle(source.brandColor)
+                    Text("Bring in a public \(source.name) playlist")
+                        .font(.headline)
+                }
+                .padding(.vertical, 4)
+            }
             Section {
                 HStack {
                     TextField("Playlist link", text: $text)

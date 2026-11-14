@@ -298,8 +298,10 @@ private struct NewPlaylistTile: View {
                 naming = true
             }
             Section("Import from a public link") {
-                Button("Spotify", systemImage: "arrow.down.circle") { importing = .spotify }
-                Button("SoundCloud", systemImage: "arrow.down.circle") { importing = .soundCloud }
+                // The services' own marks; a menu draws them in one colour.
+                ForEach(PlaylistSource.allCases) { source in
+                    Button { importing = source } label: { Label(source.name, image: source.logo) }
+                }
             }
         } label: {
             VStack(alignment: .leading, spacing: 6) {
