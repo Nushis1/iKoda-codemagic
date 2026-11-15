@@ -16,6 +16,40 @@ public enum RenewerError: LocalizedError, Sendable {
     }
 }
 
+/// What Apple offers for two-factor sign-in, at the moment it asks.
+public struct TwoFactorRequest: Sendable, Decodable {
+    public struct Number: Sendable, Decodable, Identifiable {
+        public let id: UInt32
+        public let label: String
+        public let mode: String
+    }
+
+    /// True while the way the code is to be sent hasn't been chosen yet.
+    public let needsMethod: Bool
+    /// True once a text message was chosen.
+    public let sms: Bool
+    public let selectedNumber: UInt32?
+    /// The trusted phone numbers Apple can text.
+    public let numbers: [Number]
+}
+
+/// The person's answer to a `TwoFactorRequest`.
+public enum TwoFactorAnswer: Sendable {
+    case devices
+    case sms(UInt32)
+    case resend
+    case code(String)
+
+    fileprivate var wire: String {
+        switch self {
+        case .devices: "devices"
+        case .sms(let id): "sms:\(id)"
+        case .resend: "resend"
+        case .code(let digits): "code:\(digits)"
+        }
+    }
+}
+
 /// A signed-in Apple ID. Keep it as long as it is needed; it signs out when released.
 public final class RenewerAccount: @unchecked Sendable {
     #if canImport(KodaRenewer)
@@ -51,15 +85,15 @@ public enum Renewer {
         #endif
     }
 
-    /// Signs in to an Apple ID. `code` is asked for the two-factor code and returns what the person
-    /// typed, or nil to cancel. It runs while the sign-in waits.
+    /// Signs in to an Apple ID. `ask` is called when Apple wants something for two-factor sign-in (how
+    /// to send the code, then the code) and returns the person's answer, or nil to cancel.
     public static func signIn(email: String, password: String,
-                              code: @escaping @Sendable () async -> String?) async throws -> RenewerAccount {
+                              ask: @escaping @Sendable (TwoFactorRequest) async -> TwoFactorAnswer?) async throws -> RenewerAccount {
         #if canImport(KodaRenewer)
         try await withCheckedThrowingContinuation { continuation in
             // The Rust call blocks until the sign-in is over, so it gets a thread of its own.
             DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(with: Result { try blockingSignIn(email: email, password: password, code: code) })
+                continuation.resume(with: Result { try blockingSignIn(email: email, password: password, ask: ask) })
             }
         }
         #else
@@ -71,29 +105,30 @@ public enum Renewer {
 #if canImport(KodaRenewer)
 private let startRenewer: Bool = koda_renewer_init()
 
-/// What the C callback needs: the Swift closure that asks for the code.
-private final class CodeBox: @unchecked Sendable {
-    let ask: @Sendable () async -> String?
-    init(_ ask: @escaping @Sendable () async -> String?) { self.ask = ask }
+/// What the C callback needs: the Swift closure that asks the person.
+private final class AskBox: @unchecked Sendable {
+    let ask: @Sendable (TwoFactorRequest) async -> TwoFactorAnswer?
+    init(_ ask: @escaping @Sendable (TwoFactorRequest) async -> TwoFactorAnswer?) { self.ask = ask }
 }
 
-private final class Answer: @unchecked Sendable {
-    var value: String?
+private final class Reply: @unchecked Sendable {
+    var value: TwoFactorAnswer?
 }
 
-/// Called by Rust, on its own thread, when Apple wants a code. Waits for the person to type it.
-private let askForCode: @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<CChar>?, Int) -> Bool = { user, buffer, capacity in
-    guard let user, let buffer, capacity > 1 else { return false }
-    let box = Unmanaged<CodeBox>.fromOpaque(user).takeUnretainedValue()
+/// Called by Rust, on its own thread, when Apple wants something. Waits for the person to answer.
+private let askPerson: @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<CChar>?, UnsafeMutablePointer<CChar>?, Int) -> Bool = { user, request, buffer, capacity in
+    guard let user, let request, let buffer, capacity > 1 else { return false }
+    let box = Unmanaged<AskBox>.fromOpaque(user).takeUnretainedValue()
+    guard let parsed = try? JSONDecoder().decode(TwoFactorRequest.self, from: Data(String(cString: request).utf8)) else { return false }
     let semaphore = DispatchSemaphore(value: 0)
-    let answer = Answer()
+    let reply = Reply()
     Task {
-        answer.value = await box.ask()
+        reply.value = await box.ask(parsed)
         semaphore.signal()
     }
     semaphore.wait()
-    guard let code = answer.value, !code.isEmpty else { return false }
-    let bytes = Array(code.utf8.prefix(capacity - 1))
+    guard let answer = reply.value else { return false }
+    let bytes = Array(answer.wire.utf8.prefix(capacity - 1))
     for (index, byte) in bytes.enumerated() { buffer[index] = CChar(bitPattern: byte) }
     buffer[bytes.count] = 0
     return true
@@ -109,7 +144,7 @@ private func storageDirectory() throws -> String {
 }
 
 private func blockingSignIn(email: String, password: String,
-                            code: @escaping @Sendable () async -> String?) throws -> RenewerAccount {
+                            ask: @escaping @Sendable (TwoFactorRequest) async -> TwoFactorAnswer?) throws -> RenewerAccount {
     _ = startRenewer
     let directory: String
     do {
@@ -117,14 +152,14 @@ private func blockingSignIn(email: String, password: String,
     } catch {
         throw RenewerError.failed("Koda couldn't make a folder for the sign-in state: \(error.localizedDescription)")
     }
-    let box = Unmanaged.passRetained(CodeBox(code))
+    let box = Unmanaged.passRetained(AskBox(ask))
     defer { box.release() }
     var message = [CChar](repeating: 0, count: 1024)
     let handle = email.withCString { emailPointer in
         password.withCString { passwordPointer in
             directory.withCString { directoryPointer in
                 message.withUnsafeMutableBufferPointer { buffer in
-                    koda_renewer_login(emailPointer, passwordPointer, directoryPointer, askForCode, box.toOpaque(),
+                    koda_renewer_login(emailPointer, passwordPointer, directoryPointer, askPerson, box.toOpaque(),
                                        buffer.baseAddress, buffer.count)
                 }
             }

@@ -8,11 +8,10 @@
 use std::ffi::{c_char, c_void, CStr};
 use std::path::PathBuf;
 use std::panic::{self, AssertUnwindSafe};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, Once, OnceLock};
+use std::sync::{Mutex, Once, OnceLock};
 
 use isideload::anisette::remote_v3::RemoteV3AnisetteProvider;
-use isideload::auth::apple_account::{AppleAccount, TwoFactorCallbackResponse};
+use isideload::auth::apple_account::{AppleAccount, TwoFactorCallbackParams, TwoFactorCallbackResponse};
 use isideload::util::fs_storage::FsStorage;
 use rootcause::prelude::Report;
 use tokio::runtime::{Builder, Runtime};
@@ -71,9 +70,14 @@ pub extern "C" fn koda_renewer_init() -> bool {
     panic::catch_unwind(|| isideload::init().is_ok()).unwrap_or(false)
 }
 
-/// Asked for the two-factor code. Swift writes it into `buffer` (UTF-8, NUL-ended, at most
-/// `capacity` bytes) and returns true, or returns false to cancel the sign-in.
-pub type CodeCallback = extern "C" fn(user: *mut c_void, buffer: *mut c_char, capacity: usize) -> bool;
+/// Asked about two-factor sign-in. `request` is JSON describing what Apple offers:
+/// `{"needsMethod": bool, "sms": bool, "selectedNumber": id|null, "numbers": [{"id","label","mode"}]}`.
+/// Swift writes its answer into `buffer` (UTF-8, NUL-ended, at most `capacity` bytes) and returns true,
+/// or returns false to cancel the sign-in. The answer is one of:
+/// `devices` (send the code to the trusted devices), `sms:<id>` (text the number with that id),
+/// `resend`, or `code:<digits>`.
+pub type CodeCallback =
+    extern "C" fn(user: *mut c_void, request: *const c_char, buffer: *mut c_char, capacity: usize) -> bool;
 
 /// The callback and the pointer Swift gave with it. Swift keeps `user` alive for the whole call.
 #[derive(Clone, Copy)]
@@ -87,18 +91,59 @@ unsafe impl Sync for Context {}
 
 impl Context {
     /// Blocks until Swift answers. Run it off the async workers.
-    fn ask(self) -> Option<String> {
+    fn ask(self, request: &str) -> Option<String> {
+        let request = std::ffi::CString::new(request).ok()?;
         let mut buffer = vec![0u8; 64];
-        if !(self.callback)(self.user, buffer.as_mut_ptr() as *mut c_char, buffer.len()) {
+        if !(self.callback)(self.user, request.as_ptr(), buffer.as_mut_ptr() as *mut c_char, buffer.len()) {
             return None;
         }
         let end = buffer.iter().position(|byte| *byte == 0).unwrap_or(buffer.len());
-        let code = String::from_utf8_lossy(&buffer[..end]).trim().to_string();
-        if code.is_empty() {
+        let answer = String::from_utf8_lossy(&buffer[..end]).trim().to_string();
+        if answer.is_empty() {
             None
         } else {
-            Some(code)
+            Some(answer)
         }
+    }
+}
+
+/// What Apple offers, as JSON for Swift.
+fn describe(params: &TwoFactorCallbackParams) -> String {
+    let numbers: Vec<serde_json::Value> = params
+        .numbers
+        .iter()
+        .map(|number| {
+            serde_json::json!({
+                "id": number.id,
+                "label": number.number_with_dial_code,
+                "mode": number.push_mode,
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "needsMethod": params.unknown,
+        "sms": params.sms,
+        "selectedNumber": params.selected_number_id,
+        "numbers": numbers,
+    })
+    .to_string()
+}
+
+/// Swift's answer, as isideload understands it. Anything unclear cancels the sign-in.
+fn answer_from(reply: Option<String>) -> TwoFactorCallbackResponse {
+    let Some(reply) = reply else {
+        return TwoFactorCallbackResponse::Abort;
+    };
+    if reply == "devices" {
+        TwoFactorCallbackResponse::SendToDevices
+    } else if reply == "resend" {
+        TwoFactorCallbackResponse::ResendCode
+    } else if let Some(id) = reply.strip_prefix("sms:").and_then(|id| id.parse::<u32>().ok()) {
+        TwoFactorCallbackResponse::SendSms(id)
+    } else if let Some(code) = reply.strip_prefix("code:") {
+        TwoFactorCallbackResponse::SubmitCode(code.to_string())
+    } else {
+        TwoFactorCallbackResponse::Abort
     }
 }
 
@@ -150,11 +195,9 @@ pub unsafe extern "C" fn koda_renewer_login(
     remember_panics();
     install_crypto();
     let context = Context { callback, user };
-    // isideload asks the callback more than once. The first time it wants to know HOW the code
-    // is to reach the person (to the trusted devices, or by SMS); only then does it accept the code
-    // ("Cannot submit code without knowing which method to use"). So: first call, choose the
-    // trusted devices; the calls after that ask Swift for the code.
-    let calls = Arc::new(AtomicUsize::new(0));
+    // isideload asks the callback more than once: first HOW the code is to reach the person (the
+    // trusted devices, or an SMS to one of the trusted numbers), and only then for the code itself
+    // ("Cannot submit code without knowing which method to use"). Swift asks the person each time.
     // A panic anywhere in the sign-in would take the whole app down; it is caught and reported instead.
     let outcome = panic::catch_unwind(AssertUnwindSafe(|| {
         runtime().block_on(async move {
@@ -163,18 +206,12 @@ pub unsafe extern "C" fn koda_renewer_login(
                 .set_storage(Box::new(FsStorage::new(PathBuf::from(storage_dir))));
             AppleAccount::builder(&email)
                 .anisette_provider(provider)
-                .login(&password, move |_params| {
-                    let first = calls.fetch_add(1, Ordering::SeqCst) == 0;
+                .login(&password, move |params| {
+                    let request = describe(&params);
                     async move {
-                        if first {
-                            return Ok::<TwoFactorCallbackResponse, Report>(TwoFactorCallbackResponse::SendToDevices);
-                        }
-                        // Swift waits for the person to type the code, so this must not hold up an async worker.
-                        let code = tokio::task::spawn_blocking(move || context.ask()).await.ok().flatten();
-                        Ok(match code {
-                            Some(code) => TwoFactorCallbackResponse::SubmitCode(code),
-                            None => TwoFactorCallbackResponse::Abort,
-                        })
+                        // Swift waits for the person to answer, so this must not hold up an async worker.
+                        let reply = tokio::task::spawn_blocking(move || context.ask(&request)).await.ok().flatten();
+                        Ok::<TwoFactorCallbackResponse, Report>(answer_from(reply))
                     }
                 })
                 .await

@@ -1,28 +1,34 @@
 import KodaRenewerKit
 import SwiftUI
 
-/// The state of signing in to an Apple ID through the renewal tool (stage 2). The password is
-/// handed to the tool and not kept; the signed-in account lives here, in memory, until signed out
-/// or until the screen goes away. Keeping the session between launches comes in a later stage.
+/// The state of signing in to an Apple ID through the renewal tool. The password is handed to the
+/// tool and not kept; the signed-in account lives here, in memory, until signed out or until Koda
+/// quits. Keeping the session between launches comes in a later stage.
 @Observable
 final class AppleSignIn {
     enum State: Equatable {
         case signedOut
         case signingIn
+        /// Apple wants to know how the code should reach the person: the trusted devices or a text.
+        case needsMethod
+        /// Apple sent a code and wants it typed.
         case needsCode
         case signedIn(String)
         case failed(String)
     }
 
     private(set) var state = State.signedOut
+    /// What Apple offered the last time it asked (the trusted phone numbers, mainly).
+    private(set) var request: TwoFactorRequest?
     private var account: RenewerAccount?
-    private var pendingCode: CheckedContinuation<String?, Never>?
+    private var pending: CheckedContinuation<TwoFactorAnswer?, Never>?
 
+    var isAskingForMethod: Bool { state == .needsMethod }
     var isAskingForCode: Bool { state == .needsCode }
 
     var isBusy: Bool {
         switch state {
-        case .signingIn, .needsCode: true
+        case .signingIn, .needsMethod, .needsCode: true
         default: false
         }
     }
@@ -32,8 +38,8 @@ final class AppleSignIn {
         state = .signingIn
         Task {
             do {
-                account = try await Renewer.signIn(email: email, password: password) { [weak self] in
-                    await self?.askForCode()
+                account = try await Renewer.signIn(email: email, password: password) { [weak self] request in
+                    await self?.ask(request)
                 }
                 state = .signedIn(email)
             } catch {
@@ -43,25 +49,25 @@ final class AppleSignIn {
         }
     }
 
-    /// Called while the tool waits for the code Apple sent; the screen shows the prompt.
-    private func askForCode() async -> String? {
+    /// Called while the tool waits for the person; the screen shows the matching question.
+    private func ask(_ request: TwoFactorRequest) async -> TwoFactorAnswer? {
         await withCheckedContinuation { continuation in
-            pendingCode = continuation
-            state = .needsCode
+            pending = continuation
+            self.request = request
+            state = request.needsMethod ? .needsMethod : .needsCode
         }
     }
 
-    /// The person typed the code, or cancelled with nil.
-    func submit(code: String?) {
-        let clean = code?.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// The person's answer, or nil when they cancelled.
+    func answer(_ answer: TwoFactorAnswer?) {
+        var answer = answer
+        if case .code(let digits) = answer {
+            let clean = digits.trimmingCharacters(in: .whitespacesAndNewlines)
+            answer = clean.isEmpty ? nil : .code(clean)
+        }
         state = .signingIn
-        pendingCode?.resume(returning: clean?.isEmpty == false ? clean : nil)
-        pendingCode = nil
-    }
-
-    /// Closes the code prompt without a code. A sign-in that is only waiting for Apple can't be stopped.
-    func cancelCode() {
-        if state == .needsCode { submit(code: nil) }
+        pending?.resume(returning: answer)
+        pending = nil
     }
 
     /// Something the form can't send, such as an empty field.

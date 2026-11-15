@@ -203,7 +203,7 @@ struct RenewalSettingsView: View {
                 case .signedIn:
                     Button("Log Out", role: .destructive) { signIn.signOut() }
                         .buttonStyle(.bordered)
-                case .signingIn, .needsCode:
+                case .signingIn, .needsMethod, .needsCode:
                     EmptyView()
                 case .signedOut, .failed:
                     Button("Log In") { showingLogin = true }
@@ -216,15 +216,33 @@ struct RenewalSettingsView: View {
                 TextField("6-digit code", text: $code)
                     .keyboardType(.numberPad)
                 Button("Confirm") {
-                    signIn.submit(code: code)
+                    signIn.answer(.code(code))
+                    code = ""
+                }
+                Button("Send a New Code") {
+                    signIn.answer(.resend)
                     code = ""
                 }
                 Button("Cancel", role: .cancel) {
-                    signIn.submit(code: nil)
+                    signIn.answer(nil)
                     code = ""
                 }
             } message: {
-                Text("Apple sent a code to a device or phone number you trust. Type it here.")
+                Text("Type the newest code Apple sent. If a code was refused, ask for a new one.")
+            }
+            // Before the code: how it should reach the person. A phone-only Apple ID has no trusted device,
+            // so its codes come by text, and a code sent by text is not accepted as a device code.
+            .background {
+                Color.clear
+                    .alert("How Should Apple Send the Code?", isPresented: Binding(get: { signIn.isAskingForMethod }, set: { _ in })) {
+                        Button("Trusted Devices") { signIn.answer(.devices) }
+                        ForEach(signIn.request?.numbers ?? []) { number in
+                            Button("Text \(number.label)") { signIn.answer(.sms(number.id)) }
+                        }
+                        Button("Cancel", role: .cancel) { signIn.answer(nil) }
+                    } message: {
+                        Text("Pick Trusted Devices if the Apple ID is signed in on an iPhone, iPad or Mac. If it only has a phone number, pick the text.")
+                    }
             }
         } header: {
             Text("Apple ID (experimental)")
@@ -243,7 +261,7 @@ struct RenewalSettingsView: View {
             Text(address)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-        case .signingIn, .needsCode:
+        case .signingIn, .needsMethod, .needsCode:
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
                 Text("Signing in…")
