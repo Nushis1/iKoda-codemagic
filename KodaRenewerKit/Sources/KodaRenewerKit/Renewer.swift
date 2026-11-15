@@ -99,16 +99,34 @@ private let askForCode: @convention(c) (UnsafeMutableRawPointer?, UnsafeMutableP
     return true
 }
 
+/// A folder inside the app's own space where the tool keeps its sign-in state. The current folder,
+/// which the library would otherwise use, is read-only on an iPhone.
+private func storageDirectory() throws -> String {
+    let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+    let folder = base.appendingPathComponent("KodaRenewer", isDirectory: true)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    return folder.path
+}
+
 private func blockingSignIn(email: String, password: String,
                             code: @escaping @Sendable () async -> String?) throws -> RenewerAccount {
     _ = startRenewer
+    let directory: String
+    do {
+        directory = try storageDirectory()
+    } catch {
+        throw RenewerError.failed("Koda couldn't make a folder for the sign-in state: \(error.localizedDescription)")
+    }
     let box = Unmanaged.passRetained(CodeBox(code))
     defer { box.release() }
     var message = [CChar](repeating: 0, count: 1024)
     let handle = email.withCString { emailPointer in
         password.withCString { passwordPointer in
-            message.withUnsafeMutableBufferPointer { buffer in
-                koda_renewer_login(emailPointer, passwordPointer, askForCode, box.toOpaque(), buffer.baseAddress, buffer.count)
+            directory.withCString { directoryPointer in
+                message.withUnsafeMutableBufferPointer { buffer in
+                    koda_renewer_login(emailPointer, passwordPointer, directoryPointer, askForCode, box.toOpaque(),
+                                       buffer.baseAddress, buffer.count)
+                }
             }
         }
     }

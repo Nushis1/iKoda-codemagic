@@ -23,8 +23,9 @@ uint32_t koda_renewer_ping(void);
 bool koda_renewer_init(void);
 
 /// Signs in. Returns the account, or NULL with the reason in `error`. Blocks: call it off the main thread.
-KodaAccount *koda_renewer_login(const char *email, const char *password, KodaCodeCallback callback,
-                                void *user, char *error, size_t error_capacity);
+/// `storage_dir` is a folder the app can write to; the anisette state is kept there.
+KodaAccount *koda_renewer_login(const char *email, const char *password, const char *storage_dir,
+                                KodaCodeCallback callback, void *user, char *error, size_t error_capacity);
 
 void koda_renewer_account_free(KodaAccount *account);
 

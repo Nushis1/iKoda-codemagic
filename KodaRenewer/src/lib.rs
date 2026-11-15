@@ -6,10 +6,13 @@
 //! callback)`, where the callback is asked for a two-factor code and answers a `TwoFactorCallbackResponse`.
 
 use std::ffi::{c_char, c_void, CStr};
+use std::path::PathBuf;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::{Mutex, Once, OnceLock};
 
+use isideload::anisette::remote_v3::RemoteV3AnisetteProvider;
 use isideload::auth::apple_account::{AppleAccount, TwoFactorCallbackResponse};
+use isideload::util::fs_storage::FsStorage;
 use rootcause::prelude::Report;
 use tokio::runtime::{Builder, Runtime};
 
@@ -119,13 +122,17 @@ unsafe fn write_error(message: &str, buffer: *mut c_char, capacity: usize) {
 /// Signs in. Returns a handle to the signed-in account, or null with the reason in `error`.
 /// The handle goes to `koda_renewer_account_free` when done.
 ///
+/// `storage_dir` is a folder the app may write to: isideload keeps the anisette state there (the
+/// identity it presents to Apple). Its default is the current folder, which on an iPhone is read-only.
+///
 /// # Safety
-/// `email` and `password` must be NUL-ended strings, `error` a buffer of `error_capacity` bytes,
-/// and `user` valid until this function returns.
+/// `email`, `password` and `storage_dir` must be NUL-ended strings, `error` a buffer of
+/// `error_capacity` bytes, and `user` valid until this function returns.
 #[no_mangle]
 pub unsafe extern "C" fn koda_renewer_login(
     email: *const c_char,
     password: *const c_char,
+    storage_dir: *const c_char,
     callback: CodeCallback,
     user: *mut c_void,
     error: *mut c_char,
@@ -135,13 +142,20 @@ pub unsafe extern "C" fn koda_renewer_login(
         write_error("The Apple ID or the password was empty.", error, error_capacity);
         return std::ptr::null_mut();
     };
+    let Some(storage_dir) = text(storage_dir) else {
+        write_error("No folder was given to keep the sign-in state in.", error, error_capacity);
+        return std::ptr::null_mut();
+    };
     remember_panics();
     install_crypto();
     let context = Context { callback, user };
     // A panic anywhere in the sign-in would take the whole app down; it is caught and reported instead.
     let outcome = panic::catch_unwind(AssertUnwindSafe(|| {
         runtime().block_on(async move {
+            let provider = RemoteV3AnisetteProvider::default()
+                .set_storage(Box::new(FsStorage::new(PathBuf::from(storage_dir))));
             AppleAccount::builder(&email)
+                .anisette_provider(provider)
                 .login(&password, move |_params| async move {
                     // Swift waits for the person to type the code, so this must not hold up an async worker.
                     let code = tokio::task::spawn_blocking(move || context.ask()).await.ok().flatten();
