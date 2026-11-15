@@ -50,7 +50,9 @@ echo "== The entry point is in the library:"
 # code is ignored and only a missing function fails the build.
 symbols=$(nm -gU build/libkoda_renewer-aarch64-apple-ios.a 2>/dev/null || true)
 for name in koda_renewer_ping koda_renewer_init koda_renewer_login koda_renewer_account_free; do
-  if echo "$symbols" | grep -q " T _$name\$"; then
+  # A here-string, not `echo | grep -q`: grep -q stops at the first match, echo then gets SIGPIPE,
+  # and with pipefail that made a present function look missing.
+  if grep -q " T _$name\$" <<< "$symbols"; then
     echo "  ok  $name"
   else
     echo "  MISSING  $name"
