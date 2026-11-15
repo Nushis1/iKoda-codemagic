@@ -220,7 +220,13 @@ struct RenewalSettingsView: View {
                     signIn.answer(.code(code))
                     code = ""
                 }
-                Button("Send a New Code") {
+                // For an Apple ID with only a phone number: send the code by text, whatever Apple assumed.
+                Button("Text Me a Code") {
+                    let id = signIn.request?.selectedNumber ?? signIn.request?.numbers.first?.id ?? 1
+                    signIn.answer(.sms(id))
+                    code = ""
+                }
+                Button("Send Again") {
                     signIn.answer(.resend)
                     code = ""
                 }
@@ -229,7 +235,9 @@ struct RenewalSettingsView: View {
                     code = ""
                 }
             } message: {
-                Text("Type the newest code Apple sent. If a code was refused, ask for a new one.")
+                Text(signIn.request?.sms == true
+                     ? "Apple says the code went by text. Type the newest one. Send Again repeats it."
+                     : "Apple says the code went to your trusted devices, if the Apple ID has any. If it only has a phone number, tap Text Me a Code.")
             }
             // Before the code: how it should reach the person. A phone-only Apple ID has no trusted device,
             // so its codes come by text, and a code sent by text is not accepted as a device code.
