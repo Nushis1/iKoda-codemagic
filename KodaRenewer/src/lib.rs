@@ -152,7 +152,8 @@ pub unsafe extern "C" fn koda_renewer_login(
     // A panic anywhere in the sign-in would take the whole app down; it is caught and reported instead.
     let outcome = panic::catch_unwind(AssertUnwindSafe(|| {
         runtime().block_on(async move {
-            let provider = RemoteV3AnisetteProvider::default()
+            // `default()` can fail (it builds an HTTP client), so it gives a Result.
+            let provider = RemoteV3AnisetteProvider::default()?
                 .set_storage(Box::new(FsStorage::new(PathBuf::from(storage_dir))));
             AppleAccount::builder(&email)
                 .anisette_provider(provider)
