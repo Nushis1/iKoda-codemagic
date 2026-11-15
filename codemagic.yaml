@@ -171,7 +171,8 @@ workflows:
         script: |
           set -o pipefail
           cd KodaRenewer
-          ./build-rust.sh 2>&1 | tee ../renewer.log
+          # Przez bash, bo wgranie z Windowsa gubi bit wykonywania pliku.
+          bash ./build-rust.sh 2>&1 | tee ../renewer.log
     artifacts:
       - KodaRenewer/build/*.a
       - renewer.log
