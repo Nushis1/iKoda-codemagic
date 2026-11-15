@@ -1,0 +1,29 @@
+# Stage 1 of Koda's own renewal tool: does the Rust sideloading stack build for iOS here at all?
+# Nothing in the app uses this yet. The pins follow SideInstaller's NOTES.md, which builds the
+# same stack for iOS (github.com/FrizzleM/SideInstaller).
+[package]
+name = "koda-renewer"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "koda_renewer"
+crate-type = ["staticlib"]
+
+[dependencies]
+# Talks to the device: pairing, tunnel, install, file transfer.
+idevice = { git = "https://github.com/jkcoxson/idevice", rev = "7bd551c16c6dd2e058740d85a2d9399a51a776e9", default-features = false, features = [
+    "remote_pairing", "tunnel_tcp_stack", "rsd", "tcp", "xpc", "core_device_proxy",
+    "installation_proxy", "installcoordination_proxy", "afc", "house_arrest", "misagent",
+    "heartbeat", "mobile_image_mounter", "pair", "usbmuxd", "aws-lc",
+] }
+# Apple ID sign-in, certificate and profile, signing. No keyring: iOS has none for it.
+isideload = { git = "https://github.com/nab138/isideload", default-features = false, features = ["install", "fs-storage"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
