@@ -60,6 +60,10 @@ struct RenewalSettingsView: View {
     @State private var now = Date()
     @State private var notice: String?
     @AppStorage("koda.renewal.shortcut") private var shortcutName = "Refresh Apps"
+    @State private var signIn = AppleSignIn()
+    @State private var email = ""
+    @State private var password = ""
+    @State private var code = ""
 
     var body: some View {
         Form {
@@ -73,12 +77,11 @@ struct RenewalSettingsView: View {
             }
             renew
             reminders
+            appleID
             Section {
                 LabeledContent("Renewal core", value: Renewer.isAvailable ? "Loaded (\(Renewer.ping()))" : "Not in this build")
-            } header: {
-                Text("Experimental")
             } footer: {
-                Text("Koda's own renewal tool (Apple ID sign-in, certificate, signing) is being built. This only shows whether its core is part of this build.")
+                Text("Koda's own renewal tool (Apple ID sign-in, certificate, signing) is being built; so far it can only sign in.")
             }
         }
         .navigationTitle("Renewal")
@@ -162,6 +165,62 @@ struct RenewalSettingsView: View {
             Text("Renew")
         } footer: {
             Text("Koda can't sign itself: that takes your Apple ID and an installer. SideStore and AltStore refresh apps from the phone (SideStore needs a pairing file and a VPN profile, and its Shortcuts action \"Refresh All Apps\" can be run from here by naming the shortcut). With Sideloadly, connect the iPhone to your computer, open Sideloadly and install Koda again with the same Apple ID.")
+        }
+    }
+
+    private var appleID: some View {
+        Section {
+            switch signIn.state {
+            case .signedIn(let address):
+                Label("Signed in", systemImage: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+                Text(address)
+                    .foregroundStyle(.secondary)
+                Button("Sign Out", role: .destructive) { signIn.signOut() }
+            case .signingIn, .needsCode:
+                HStack(spacing: 12) {
+                    ProgressView()
+                    Text("Signing in…")
+                }
+            case .signedOut, .failed:
+                TextField("Apple ID (e-mail)", text: $email)
+                    .keyboardType(.emailAddress)
+                    .textContentType(.username)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                SecureField("Password", text: $password)
+                    .textContentType(.password)
+                Button("Sign In") {
+                    let id = email.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let secret = password
+                    password = ""
+                    signIn.signIn(email: id, password: secret)
+                }
+                .disabled(email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || password.isEmpty || !Renewer.isAvailable)
+                if case .failed(let message) = signIn.state {
+                    Label(message, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+            }
+        } header: {
+            Text("Apple ID (experimental)")
+        } footer: {
+            Text("Use a separate Apple ID made for this, not your main one. The password goes to Apple through the tool and isn't saved; Apple will send a code to your other devices. The session is forgotten when you leave this screen. Nothing is renewed yet.")
+        }
+        .alert("Verification Code", isPresented: Binding(get: { signIn.isAskingForCode }, set: { _ in })) {
+            TextField("6-digit code", text: $code)
+                .keyboardType(.numberPad)
+            Button("Submit") {
+                signIn.submit(code: code)
+                code = ""
+            }
+            Button("Cancel", role: .cancel) {
+                signIn.submit(code: nil)
+                code = ""
+            }
+        } message: {
+            Text("Apple sent a code to your other devices. Type it here.")
         }
     }
 
