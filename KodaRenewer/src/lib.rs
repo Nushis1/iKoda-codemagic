@@ -6,7 +6,8 @@
 //! callback)`, where the callback is asked for a two-factor code and answers a `TwoFactorCallbackResponse`.
 
 use std::ffi::{c_char, c_void, CStr};
-use std::sync::OnceLock;
+use std::panic::{self, AssertUnwindSafe};
+use std::sync::{Mutex, Once, OnceLock};
 
 use isideload::auth::apple_account::{AppleAccount, TwoFactorCallbackResponse};
 use rootcause::prelude::Report;
@@ -29,11 +30,34 @@ fn runtime() -> &'static Runtime {
     })
 }
 
+/// What the last panic said and where, kept so it can be shown instead of crashing the app.
+static LAST_PANIC: Mutex<Option<String>> = Mutex::new(None);
+
+fn remember_panics() {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        panic::set_hook(Box::new(|info| {
+            if let Ok(mut slot) = LAST_PANIC.lock() {
+                *slot = Some(info.to_string());
+            }
+        }));
+    });
+}
+
+fn last_panic() -> String {
+    LAST_PANIC
+        .lock()
+        .ok()
+        .and_then(|mut slot| slot.take())
+        .unwrap_or_else(|| "no details".to_string())
+}
+
 /// Call once at the start: without it, network errors from isideload show no details.
 /// Returns false if isideload could not set itself up.
 #[no_mangle]
 pub extern "C" fn koda_renewer_init() -> bool {
-    isideload::init().is_ok()
+    remember_panics();
+    panic::catch_unwind(|| isideload::init().is_ok()).unwrap_or(false)
 }
 
 /// Asked for the two-factor code. Swift writes it into `buffer` (UTF-8, NUL-ended, at most
@@ -104,19 +128,30 @@ pub unsafe extern "C" fn koda_renewer_login(
         write_error("The Apple ID or the password was empty.", error, error_capacity);
         return std::ptr::null_mut();
     };
+    remember_panics();
     let context = Context { callback, user };
-    let result = runtime().block_on(async move {
-        AppleAccount::builder(&email)
-            .login(&password, move |_params| async move {
-                // Swift waits for the person to type the code, so this must not hold up an async worker.
-                let code = tokio::task::spawn_blocking(move || context.ask()).await.ok().flatten();
-                Ok::<TwoFactorCallbackResponse, Report>(match code {
-                    Some(code) => TwoFactorCallbackResponse::SubmitCode(code),
-                    None => TwoFactorCallbackResponse::Abort,
+    // A panic anywhere in the sign-in would take the whole app down; it is caught and reported instead.
+    let outcome = panic::catch_unwind(AssertUnwindSafe(|| {
+        runtime().block_on(async move {
+            AppleAccount::builder(&email)
+                .login(&password, move |_params| async move {
+                    // Swift waits for the person to type the code, so this must not hold up an async worker.
+                    let code = tokio::task::spawn_blocking(move || context.ask()).await.ok().flatten();
+                    Ok::<TwoFactorCallbackResponse, Report>(match code {
+                        Some(code) => TwoFactorCallbackResponse::SubmitCode(code),
+                        None => TwoFactorCallbackResponse::Abort,
+                    })
                 })
-            })
-            .await
-    });
+                .await
+        })
+    }));
+    let result = match outcome {
+        Ok(result) => result,
+        Err(_) => {
+            write_error(&format!("The renewal tool crashed: {}", last_panic()), error, error_capacity);
+            return std::ptr::null_mut();
+        }
+    };
     match result {
         Ok(account) => Box::into_raw(Box::new(account)),
         Err(report) => {

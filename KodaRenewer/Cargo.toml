@@ -32,5 +32,5 @@ rootcause = "0.12"
 opt-level = "z"
 lto = true
 codegen-units = 1
-panic = "abort"
+# panic stays "unwind" (the default): a panic is caught in lib.rs and shown on screen, not a crash.
 strip = true
