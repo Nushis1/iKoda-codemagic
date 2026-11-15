@@ -29,6 +29,10 @@ bool koda_renewer_init(void);
 KodaAccount *koda_renewer_login(const char *email, const char *password, const char *storage_dir,
                                 KodaCodeCallback callback, void *user, char *error, size_t error_capacity);
 
+/// Reads the account's teams, certificates and app-ID counts (read-only) as JSON into `out`.
+/// Returns false with the reason in `error`. Blocks: call it off the main thread.
+bool koda_renewer_account_info(KodaAccount *account, char *out, size_t out_capacity, char *error, size_t error_capacity);
+
 void koda_renewer_account_free(KodaAccount *account);
 
 #ifdef __cplusplus

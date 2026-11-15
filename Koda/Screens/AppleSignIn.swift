@@ -21,6 +21,10 @@ final class AppleSignIn {
     /// What Apple offered the last time it asked (the trusted phone numbers, mainly).
     private(set) var request: TwoFactorRequest?
     private var account: RenewerAccount?
+    /// What the signed-in Apple ID has in the developer service, once read.
+    private(set) var developer: DeveloperInfo?
+    private(set) var developerError: String?
+    private(set) var isReading = false
     private var pending: CheckedContinuation<TwoFactorAnswer?, Never>?
 
     var isAskingForMethod: Bool { state == .needsMethod }
@@ -76,8 +80,26 @@ final class AppleSignIn {
         state = .failed(message)
     }
 
+    /// Reads the developer account (teams, certificates, app-ID counts). Changes nothing.
+    func readDeveloperAccount() {
+        guard let account, !isReading else { return }
+        isReading = true
+        developerError = nil
+        Task {
+            do {
+                developer = try await account.developerInfo()
+            } catch {
+                developer = nil
+                developerError = error.localizedDescription
+            }
+            isReading = false
+        }
+    }
+
     func signOut() {
         account = nil
+        developer = nil
+        developerError = nil
         state = .signedOut
     }
 }

@@ -78,6 +78,7 @@ struct RenewalSettingsView: View {
             renew
             reminders
             appleID
+            if case .signedIn = app.appleSignIn.state { developerAccount }
             Section {
                 LabeledContent("Renewal core", value: Renewer.isAvailable ? "Loaded (\(Renewer.ping()))" : "Not in this build")
             } footer: {
@@ -248,6 +249,63 @@ struct RenewalSettingsView: View {
             Text("Apple ID (experimental)")
         } footer: {
             Text("Koda's own renewal tool signs in to an Apple ID, which should be a separate one made for this. The session lasts until you close Koda. Nothing is renewed yet.")
+        }
+    }
+
+    /// What the signed-in Apple ID has at Apple's developer service: a first read-only check that the
+    /// renewal tool can talk to it, before anything is made or signed.
+    private var developerAccount: some View {
+        let signIn = app.appleSignIn
+        return Section {
+            Button {
+                signIn.readDeveloperAccount()
+            } label: {
+                HStack(spacing: 8) {
+                    if signIn.isReading { ProgressView().controlSize(.small) }
+                    Text(signIn.developer == nil ? "Read Developer Account" : "Read Again")
+                }
+            }
+            .disabled(signIn.isReading)
+            if let message = signIn.developerError {
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+            if let developer = signIn.developer {
+                if developer.teams.isEmpty {
+                    Text("This Apple ID has no developer team yet.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(developer.teams) { team in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(team.name ?? "Team")
+                            .font(.headline)
+                        Text("Team ID \(team.teamId)" + (team.type.map { " · \($0)" } ?? ""))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        let ids = team.appIDs
+                        Text("App IDs: \(ids.used) used" + (ids.available.map { ", \($0) available" } ?? "")
+                             + (ids.max.map { " of \($0)" } ?? ""))
+                            .font(.footnote)
+                        if team.certificates.isEmpty {
+                            Text("No development certificates.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        ForEach(team.certificates) { certificate in
+                            Text((certificate.machine ?? certificate.name ?? "Certificate")
+                                 + (certificate.expires.map { " · until \($0)" } ?? ""))
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+        } header: {
+            Text("Developer account (experimental)")
+        } footer: {
+            Text("Only reads what the Apple ID has at Apple's developer service. Nothing is created or changed.")
         }
     }
 

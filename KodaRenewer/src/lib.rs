@@ -12,6 +12,11 @@ use std::sync::{Mutex, Once, OnceLock};
 
 use isideload::anisette::remote_v3::RemoteV3AnisetteProvider;
 use isideload::auth::apple_account::{AppleAccount, TwoFactorCallbackParams, TwoFactorCallbackResponse};
+use isideload::dev::app_ids::AppIdsApi;
+use isideload::dev::certificates::CertificatesApi;
+use isideload::dev::developer_session::DeveloperSession;
+use isideload::dev::device_type::DeveloperDeviceType;
+use isideload::dev::teams::TeamsApi;
 use isideload::util::fs_storage::FsStorage;
 use rootcause::prelude::Report;
 use tokio::runtime::{Builder, Runtime};
@@ -239,5 +244,86 @@ pub unsafe extern "C" fn koda_renewer_login(
 pub unsafe extern "C" fn koda_renewer_account_free(account: *mut AppleAccount) {
     if !account.is_null() {
         drop(Box::from_raw(account));
+    }
+}
+
+/// Reads what the Apple ID has in the developer service, without changing anything: its teams, the
+/// development certificates on each, and how many app IDs are used (a free account has a weekly limit).
+async fn read_account(account: &mut AppleAccount) -> Result<String, Report> {
+    let mut session = DeveloperSession::from_account(account).await?;
+    let teams = session.list_teams().await?;
+    let mut found = Vec::new();
+    for team in &teams {
+        let certificates = session.list_ios_certs(team).await?;
+        let app_ids = session.list_app_ids(team, DeveloperDeviceType::Ios).await?;
+        let certificates: Vec<serde_json::Value> = certificates
+            .iter()
+            .map(|certificate| {
+                serde_json::json!({
+                    "name": certificate.name,
+                    "serialNumber": certificate.serial_number,
+                    "machine": certificate.machine_name,
+                    "status": certificate.status,
+                    "expires": certificate.expiration_date.as_ref().map(|date| date.to_string()),
+                })
+            })
+            .collect();
+        found.push(serde_json::json!({
+            "name": team.name,
+            "teamId": team.team_id,
+            "type": team.r#type,
+            "status": team.status,
+            "certificates": certificates,
+            "appIDs": {
+                "used": app_ids.app_ids.len(),
+                "max": app_ids.max_quantity,
+                "available": app_ids.available_quantity,
+            },
+        }));
+    }
+    Ok(serde_json::json!({ "teams": found }).to_string())
+}
+
+/// Reads the developer account of a signed-in Apple ID (stage 3, read-only). On success the answer is
+/// JSON in `out`; otherwise false, with the reason in `error`.
+///
+/// # Safety
+/// `account` must come from `koda_renewer_login`; `out` and `error` are buffers of their capacities.
+#[no_mangle]
+pub unsafe extern "C" fn koda_renewer_account_info(
+    account: *mut AppleAccount,
+    out: *mut c_char,
+    out_capacity: usize,
+    error: *mut c_char,
+    error_capacity: usize,
+) -> bool {
+    remember_panics();
+    install_crypto();
+    if account.is_null() {
+        write_error("There is no signed-in account.", error, error_capacity);
+        return false;
+    }
+    let account = &mut *account;
+    let outcome = panic::catch_unwind(AssertUnwindSafe(|| runtime().block_on(read_account(account))));
+    let result = match outcome {
+        Ok(result) => result,
+        Err(_) => {
+            write_error(&format!("The renewal tool crashed: {}", last_panic()), error, error_capacity);
+            return false;
+        }
+    };
+    match result {
+        Ok(json) if json.len() < out_capacity => {
+            write_error(&json, out, out_capacity);
+            true
+        }
+        Ok(_) => {
+            write_error("The answer was too long to hand over.", error, error_capacity);
+            false
+        }
+        Err(report) => {
+            write_error(&format!("{report}"), error, error_capacity);
+            false
+        }
     }
 }

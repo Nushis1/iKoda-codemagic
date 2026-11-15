@@ -50,6 +50,36 @@ public enum TwoFactorAnswer: Sendable {
     }
 }
 
+/// What an Apple ID has in the developer service: read-only, stage 3.
+public struct DeveloperInfo: Sendable, Decodable {
+    public struct Certificate: Sendable, Decodable, Identifiable {
+        public let name: String?
+        public let serialNumber: String?
+        public let machine: String?
+        public let status: String?
+        public let expires: String?
+        public var id: String { serialNumber ?? name ?? UUID().uuidString }
+    }
+
+    public struct AppIDs: Sendable, Decodable {
+        public let used: Int
+        public let max: Int?
+        public let available: Int?
+    }
+
+    public struct Team: Sendable, Decodable, Identifiable {
+        public let name: String?
+        public let teamId: String
+        public let type: String?
+        public let status: String?
+        public let certificates: [Certificate]
+        public let appIDs: AppIDs
+        public var id: String { teamId }
+    }
+
+    public let teams: [Team]
+}
+
 /// A signed-in Apple ID. Keep it as long as it is needed; it signs out when released.
 public final class RenewerAccount: @unchecked Sendable {
     #if canImport(KodaRenewer)
@@ -61,6 +91,40 @@ public final class RenewerAccount: @unchecked Sendable {
 
     deinit {
         koda_renewer_account_free(handle)
+    }
+    #endif
+
+    /// Reads the account's developer teams, certificates and app-ID counts. Changes nothing.
+    public func developerInfo() async throws -> DeveloperInfo {
+        #if canImport(KodaRenewer)
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(with: Result { try self.blockingDeveloperInfo() })
+            }
+        }
+        #else
+        throw RenewerError.unavailable
+        #endif
+    }
+
+    #if canImport(KodaRenewer)
+    private func blockingDeveloperInfo() throws -> DeveloperInfo {
+        var answer = [CChar](repeating: 0, count: 64 * 1024)
+        var message = [CChar](repeating: 0, count: 1024)
+        let ok = answer.withUnsafeMutableBufferPointer { out in
+            message.withUnsafeMutableBufferPointer { error in
+                koda_renewer_account_info(handle, out.baseAddress, out.count, error.baseAddress, error.count)
+            }
+        }
+        guard ok else {
+            let reason = String(cString: message)
+            throw RenewerError.failed(reason.isEmpty ? "The developer account couldn't be read." : reason)
+        }
+        do {
+            return try JSONDecoder().decode(DeveloperInfo.self, from: Data(String(cString: answer).utf8))
+        } catch {
+            throw RenewerError.failed("The developer account answer wasn't understood: \(error.localizedDescription)")
+        }
     }
     #endif
 }
