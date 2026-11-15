@@ -27,6 +27,9 @@ isideload = { git = "https://github.com/nab138/isideload", rev = "326e5622", def
 # Named directly: the runtime that runs isideload's async calls, and its error type.
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 rootcause = "0.12"
+# reqwest (inside isideload) builds on rustls without choosing a crypto provider; one has to be
+# installed before its first connection, or it panics. aws-lc-rs is already in the build for idevice.
+rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "std"] }
 
 [profile.release]
 opt-level = "z"

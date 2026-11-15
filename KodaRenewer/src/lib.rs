@@ -52,11 +52,18 @@ fn last_panic() -> String {
         .unwrap_or_else(|| "no details".to_string())
 }
 
+/// TLS needs a crypto provider chosen once for the whole process; reqwest won't pick one itself.
+/// Harmless to call again: once one is installed, the call just says so and is ignored.
+fn install_crypto() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+}
+
 /// Call once at the start: without it, network errors from isideload show no details.
 /// Returns false if isideload could not set itself up.
 #[no_mangle]
 pub extern "C" fn koda_renewer_init() -> bool {
     remember_panics();
+    install_crypto();
     panic::catch_unwind(|| isideload::init().is_ok()).unwrap_or(false)
 }
 
@@ -129,6 +136,7 @@ pub unsafe extern "C" fn koda_renewer_login(
         return std::ptr::null_mut();
     };
     remember_panics();
+    install_crypto();
     let context = Context { callback, user };
     // A panic anywhere in the sign-in would take the whole app down; it is caught and reported instead.
     let outcome = panic::catch_unwind(AssertUnwindSafe(|| {
