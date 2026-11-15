@@ -19,8 +19,8 @@ typedef bool (*KodaCodeCallback)(void *user, char *buffer, size_t capacity);
 
 uint32_t koda_renewer_ping(void);
 
-/// Call once at the start.
-void koda_renewer_init(void);
+/// Call once at the start. False if it could not set itself up.
+bool koda_renewer_init(void);
 
 /// Signs in. Returns the account, or NULL with the reason in `error`. Blocks: call it off the main thread.
 KodaAccount *koda_renewer_login(const char *email, const char *password, KodaCodeCallback callback,

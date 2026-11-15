@@ -156,8 +156,8 @@ workflows:
     #       - twoj@adres.pl
 
   # EKSPERYMENT: własne narzędzie do odnawiania podpisu w aplikacji (etap 1).
-  # Sprawdza tylko, czy stos Rust (idevice + isideload) buduje się na iOS w Codemagic.
-  # Nic w aplikacji go jeszcze nie używa. Start ręczny; wynik: biblioteki .a i log.
+  # Buduje stos Rust (idevice + isideload) na iOS i składa z niego KodaRenewer.xcframework.
+  # Nic w aplikacji go jeszcze nie używa. Start ręczny; wynik: XCFramework (zip), biblioteki .a i log.
   renewer-core:
     name: Renewer core (Rust for iOS, experiment)
     labels:
@@ -174,6 +174,7 @@ workflows:
           # Przez bash, bo wgranie z Windowsa gubi bit wykonywania pliku.
           bash ./build-rust.sh 2>&1 | tee ../renewer.log
     artifacts:
+      - KodaRenewer/build/KodaRenewer.xcframework.zip
       - KodaRenewer/build/*.a
       - renewer.log
 

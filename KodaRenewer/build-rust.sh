@@ -27,6 +27,20 @@ for target in aarch64-apple-ios aarch64-apple-ios-sim; do
   cp "target/$target/release/libkoda_renewer.a" "build/libkoda_renewer-$target.a"
 done
 
+# One XCFramework with both builds, so Xcode picks the right one for a phone or the simulator.
+# Swift imports it as `import KodaRenewer` (include/module.modulemap).
+rm -rf build/KodaRenewer.xcframework build/KodaRenewer.xcframework.zip
+xcodebuild -create-xcframework \
+  -library build/libkoda_renewer-aarch64-apple-ios.a -headers include \
+  -library build/libkoda_renewer-aarch64-apple-ios-sim.a -headers include \
+  -output build/KodaRenewer.xcframework
+(cd build && zip -qry KodaRenewer.xcframework.zip KodaRenewer.xcframework)
+echo "== XCFramework:"
+find build/KodaRenewer.xcframework -maxdepth 2 | sort
+cat build/KodaRenewer.xcframework/Info.plist | head -40
+
 ls -lh build
 echo "== The entry point is in the library:"
-nm -gU build/libkoda_renewer-aarch64-apple-ios.a | grep koda_renewer_ping
+# Every exported entry point should be listed (the errors above are Xcode's nm not reading
+# Rust's newer LLVM objects, and don't matter).
+nm -gU build/libkoda_renewer-aarch64-apple-ios.a 2>/dev/null | grep " T _koda_renewer_"

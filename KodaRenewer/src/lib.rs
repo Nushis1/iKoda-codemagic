@@ -30,9 +30,10 @@ fn runtime() -> &'static Runtime {
 }
 
 /// Call once at the start: without it, network errors from isideload show no details.
+/// Returns false if isideload could not set itself up.
 #[no_mangle]
-pub extern "C" fn koda_renewer_init() {
-    isideload::init();
+pub extern "C" fn koda_renewer_init() -> bool {
+    isideload::init().is_ok()
 }
 
 /// Asked for the two-factor code. Swift writes it into `buffer` (UTF-8, NUL-ended, at most
