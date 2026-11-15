@@ -55,6 +55,11 @@ workflows:
     max_build_duration: 45
     environment:
       xcode: edge
+    cache:
+      cache_paths:
+        - $HOME/.cargo/registry
+        - $HOME/.cargo/git
+        - $CM_BUILD_DIR/KodaRenewer/target
     triggering: *triggers
     scripts:
       - name: Show toolchain
@@ -65,6 +70,11 @@ workflows:
       - name: Test KodaCore
         working_directory: KodaCore
         script: swift test
+
+      - name: Build the Rust core (KodaRenewerKit needs it before Xcode runs)
+        script: |
+          set -o pipefail
+          bash KodaRenewer/build-rust.sh 2>&1 | tail -n 25
 
       - name: Build unsigned app
         script: |
@@ -121,6 +131,11 @@ workflows:
         XCODE_SCHEME: Koda
         BUNDLE_ID: ivors.Koda
         WIDGETS_BUNDLE_ID: ivors.Koda.Widgets
+    cache:
+      cache_paths:
+        - $HOME/.cargo/registry
+        - $HOME/.cargo/git
+        - $CM_BUILD_DIR/KodaRenewer/target
     scripts:
       - name: Set up keychain
         script: keychain initialize
@@ -137,6 +152,11 @@ workflows:
 
       - name: Add certificates to keychain
         script: keychain add-certificates
+
+      - name: Build the Rust core (KodaRenewerKit needs it before Xcode runs)
+        script: |
+          set -o pipefail
+          bash KodaRenewer/build-rust.sh 2>&1 | tail -n 25
 
       - name: Apply provisioning profiles to the Xcode project
         script: xcode-project use-profiles
@@ -187,10 +207,20 @@ workflows:
     environment:
       # Stabilny Xcode 26, jak dawny runner macos-26.
       xcode: latest
+    cache:
+      cache_paths:
+        - $HOME/.cargo/registry
+        - $HOME/.cargo/git
+        - $CM_BUILD_DIR/KodaRenewer/target
     triggering: *triggers
     scripts:
       # Jeden plik dla Apple silicon i Intela. Podpis ad-hoc: Apple silicon nie uruchamia
       # niepodpisanego kodu, a bez Developer ID nie ma czym lepiej podpisać.
+      - name: Build the Rust core (KodaRenewerKit needs it before Xcode runs)
+        script: |
+          set -o pipefail
+          bash KodaRenewer/build-rust.sh 2>&1 | tail -n 25
+
       - name: Build universal Mac app
         script: |
           set -o pipefail

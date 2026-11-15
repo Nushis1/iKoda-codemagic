@@ -1,4 +1,5 @@
 import KodaCore
+import KodaRenewerKit
 import SwiftUI
 import UserNotifications
 
@@ -72,6 +73,13 @@ struct RenewalSettingsView: View {
             }
             renew
             reminders
+            Section {
+                LabeledContent("Renewal core", value: Renewer.isAvailable ? "Loaded (\(Renewer.ping()))" : "Not in this build")
+            } header: {
+                Text("Experimental")
+            } footer: {
+                Text("Koda's own renewal tool (Apple ID sign-in, certificate, signing) is being built. This only shows whether its core is part of this build.")
+            }
         }
         .navigationTitle("Renewal")
         .task {

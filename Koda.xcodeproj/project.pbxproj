@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		1FA79FC2307FF2300099A7C2 /* KodaCore in Frameworks */ = {isa = PBXBuildFile; productRef = 1FA79FC1307FF2300099A7C2 /* KodaCore */; };
+		1FA79FC5307FF2300099A7C2 /* KodaRenewerKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1FA79FC4307FF2300099A7C2 /* KodaRenewerKit */; };
 		4B1D000000000000000A0001 /* KodaWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4B1D000000000000000A0000 /* KodaWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -64,6 +65,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1FA79FC2307FF2300099A7C2 /* KodaCore in Frameworks */,
+				1FA79FC5307FF2300099A7C2 /* KodaRenewerKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -120,6 +122,7 @@
 			name = Koda;
 			packageProductDependencies = (
 				1FA79FC1307FF2300099A7C2 /* KodaCore */,
+				1FA79FC4307FF2300099A7C2 /* KodaRenewerKit */,
 			);
 			productName = Koda;
 			productReference = 1FA79FA4307FF22C0099A7C2 /* Koda.app */;
@@ -175,6 +178,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				1FA79FC0307FF2300099A7C2 /* XCLocalSwiftPackageReference "KodaCore" */,
+				1FA79FC3307FF2300099A7C2 /* XCLocalSwiftPackageReference "KodaRenewerKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1FA79FA5307FF22C0099A7C2 /* Products */;
@@ -545,12 +549,20 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = KodaCore;
 		};
+		1FA79FC3307FF2300099A7C2 /* XCLocalSwiftPackageReference "KodaRenewerKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = KodaRenewerKit;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		1FA79FC1307FF2300099A7C2 /* KodaCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = KodaCore;
+		};
+		1FA79FC4307FF2300099A7C2 /* KodaRenewerKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KodaRenewerKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

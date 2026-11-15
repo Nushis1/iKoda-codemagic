@@ -39,6 +39,10 @@ echo "== XCFramework:"
 find build/KodaRenewer.xcframework -maxdepth 2 | sort
 cat build/KodaRenewer.xcframework/Info.plist | head -40
 
+# Where the Swift package KodaRenewerKit looks for it (not in git).
+rm -rf ../KodaRenewerKit/KodaRenewer.xcframework
+cp -R build/KodaRenewer.xcframework ../KodaRenewerKit/KodaRenewer.xcframework
+
 ls -lh build
 echo "== The entry point is in the library:"
 # Every exported entry point should be listed (the errors above are Xcode's nm not reading
