@@ -8,7 +8,8 @@
 use std::ffi::{c_char, c_void, CStr};
 use std::path::PathBuf;
 use std::panic::{self, AssertUnwindSafe};
-use std::sync::{Mutex, Once, OnceLock};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, Once, OnceLock};
 
 use isideload::anisette::remote_v3::RemoteV3AnisetteProvider;
 use isideload::auth::apple_account::{AppleAccount, TwoFactorCallbackResponse};
@@ -149,6 +150,11 @@ pub unsafe extern "C" fn koda_renewer_login(
     remember_panics();
     install_crypto();
     let context = Context { callback, user };
+    // isideload asks the callback more than once. The first time it wants to know HOW the code
+    // is to reach the person (to the trusted devices, or by SMS); only then does it accept the code
+    // ("Cannot submit code without knowing which method to use"). So: first call, choose the
+    // trusted devices; the calls after that ask Swift for the code.
+    let calls = Arc::new(AtomicUsize::new(0));
     // A panic anywhere in the sign-in would take the whole app down; it is caught and reported instead.
     let outcome = panic::catch_unwind(AssertUnwindSafe(|| {
         runtime().block_on(async move {
@@ -157,13 +163,19 @@ pub unsafe extern "C" fn koda_renewer_login(
                 .set_storage(Box::new(FsStorage::new(PathBuf::from(storage_dir))));
             AppleAccount::builder(&email)
                 .anisette_provider(provider)
-                .login(&password, move |_params| async move {
-                    // Swift waits for the person to type the code, so this must not hold up an async worker.
-                    let code = tokio::task::spawn_blocking(move || context.ask()).await.ok().flatten();
-                    Ok::<TwoFactorCallbackResponse, Report>(match code {
-                        Some(code) => TwoFactorCallbackResponse::SubmitCode(code),
-                        None => TwoFactorCallbackResponse::Abort,
-                    })
+                .login(&password, move |_params| {
+                    let first = calls.fetch_add(1, Ordering::SeqCst) == 0;
+                    async move {
+                        if first {
+                            return Ok::<TwoFactorCallbackResponse, Report>(TwoFactorCallbackResponse::SendToDevices);
+                        }
+                        // Swift waits for the person to type the code, so this must not hold up an async worker.
+                        let code = tokio::task::spawn_blocking(move || context.ask()).await.ok().flatten();
+                        Ok(match code {
+                            Some(code) => TwoFactorCallbackResponse::SubmitCode(code),
+                            None => TwoFactorCallbackResponse::Abort,
+                        })
+                    }
                 })
                 .await
         })
