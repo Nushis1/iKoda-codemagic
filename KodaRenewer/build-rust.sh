@@ -37,7 +37,7 @@ xcodebuild -create-xcframework \
 (cd build && zip -qry KodaRenewer.xcframework.zip KodaRenewer.xcframework)
 echo "== XCFramework:"
 find build/KodaRenewer.xcframework -maxdepth 2 | sort
-cat build/KodaRenewer.xcframework/Info.plist | head -40
+head -40 build/KodaRenewer.xcframework/Info.plist
 
 # Where the Swift package KodaRenewerKit looks for it (not in git).
 rm -rf ../KodaRenewerKit/KodaRenewer.xcframework
@@ -45,6 +45,15 @@ cp -R build/KodaRenewer.xcframework ../KodaRenewerKit/KodaRenewer.xcframework
 
 ls -lh build
 echo "== The entry point is in the library:"
-# Every exported entry point should be listed (the errors above are Xcode's nm not reading
-# Rust's newer LLVM objects, and don't matter).
-nm -gU build/libkoda_renewer-aarch64-apple-ios.a 2>/dev/null | grep " T _koda_renewer_"
+# Every exported entry point should be listed. Xcode's nm cannot read some of Rust's newer LLVM
+# objects and exits with an error for them; that says nothing about our functions, so its exit
+# code is ignored and only a missing function fails the build.
+symbols=$(nm -gU build/libkoda_renewer-aarch64-apple-ios.a 2>/dev/null || true)
+for name in koda_renewer_ping koda_renewer_init koda_renewer_login koda_renewer_account_free; do
+  if echo "$symbols" | grep -q " T _$name\$"; then
+    echo "  ok  $name"
+  else
+    echo "  MISSING  $name"
+    exit 1
+  fi
+done
