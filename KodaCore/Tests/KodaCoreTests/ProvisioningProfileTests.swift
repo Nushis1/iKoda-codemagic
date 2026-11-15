@@ -59,8 +59,9 @@ import Testing
     @Test func theFractionLeftRunsFromOneToZero() throws {
         let profile = try #require(ProvisioningProfile.parse(blob))
         #expect(profile.fractionLeft(at: try date("2026-11-10T08:00:00Z")) == 1)
+        // Signed 10 Nov 08:00, ends 17 Nov 08:00 (168 h); on 13 Nov 20:00 there are 84 h left: half.
         let part = try #require(profile.fractionLeft(at: try date("2026-11-13T20:00:00Z")))
-        #expect(abs(part - 108.0 / 168.0) < 0.0001)
+        #expect(abs(part - 84.0 / 168.0) < 0.0001)
         #expect(ProvisioningProfile(name: "x", expires: Date()).fractionLeft() == nil)
     }
 }
