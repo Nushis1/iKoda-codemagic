@@ -264,7 +264,7 @@ async fn read_account(account: &mut AppleAccount) -> Result<String, Report> {
                     "serialNumber": certificate.serial_number,
                     "machine": certificate.machine_name,
                     "status": certificate.status,
-                    "expires": certificate.expiration_date.as_ref().map(|date| date.to_string()),
+                    "expires": certificate.expiration_date.as_ref().map(|date| date.to_xml_format()),
                 })
             })
             .collect();
