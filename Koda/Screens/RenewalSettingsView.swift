@@ -60,7 +60,10 @@ struct RenewalSettingsView: View {
     @State private var now = Date()
     @State private var notice: String?
     @AppStorage("koda.renewal.shortcut") private var shortcutName = "Refresh Apps"
-    @State private var showingSignIn = false
+    @State private var showingLogin = false
+    @State private var email = UserDefaults.standard.string(forKey: "koda.renewal.appleID") ?? ""
+    @State private var password = ""
+    @State private var code = ""
 
     var body: some View {
         Form {
@@ -167,42 +170,97 @@ struct RenewalSettingsView: View {
 
     private var appleID: some View {
         let signIn = app.appleSignIn
-        var address: String?
-        if case .signedIn(let id) = signIn.state { address = id }
         return Section {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Apple ID")
-                    if let address {
-                        Label("Signed in", systemImage: "checkmark.seal.fill")
-                            .font(.footnote)
-                            .foregroundStyle(.green)
-                        Text(address)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("Not signed in")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                    appleIDStatus(signIn.state)
+                }
+                // Like the alert for a new playlist: the Apple ID and the password, then Log In.
+                .alert("Apple ID", isPresented: $showingLogin) {
+                    TextField("Apple ID (e-mail)", text: $email)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    SecureField("Password", text: $password)
+                    Button("Log In") {
+                        let id = email.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let secret = password
+                        password = ""
+                        guard !id.isEmpty, !secret.isEmpty else {
+                            signIn.report("Enter the Apple ID and the password.")
+                            return
+                        }
+                        UserDefaults.standard.set(id, forKey: "koda.renewal.appleID")
+                        signIn.signIn(email: id, password: secret)
                     }
+                    Button("Cancel", role: .cancel) { password = "" }
+                } message: {
+                    Text("Use a separate Apple ID made for this, not your main one. The password isn't saved.")
                 }
                 Spacer()
-                if address != nil {
+                switch signIn.state {
+                case .signedIn:
                     Button("Log Out", role: .destructive) { signIn.signOut() }
                         .buttonStyle(.bordered)
-                } else {
-                    Button("Log In") { showingSignIn = true }
+                case .signingIn, .needsCode:
+                    EmptyView()
+                case .signedOut, .failed:
+                    Button("Log In") { showingLogin = true }
                         .buttonStyle(.borderedProminent)
                         .disabled(!Renewer.isAvailable)
                 }
+            }
+            // Apple's two-factor code, asked for in the same way once the password is accepted.
+            .alert("Verification Code", isPresented: Binding(get: { signIn.isAskingForCode }, set: { _ in })) {
+                TextField("6-digit code", text: $code)
+                    .keyboardType(.numberPad)
+                Button("Confirm") {
+                    signIn.submit(code: code)
+                    code = ""
+                }
+                Button("Cancel", role: .cancel) {
+                    signIn.submit(code: nil)
+                    code = ""
+                }
+            } message: {
+                Text("Apple sent a code to a device or phone number you trust. Type it here.")
             }
         } header: {
             Text("Apple ID (experimental)")
         } footer: {
             Text("Koda's own renewal tool signs in to an Apple ID, which should be a separate one made for this. The session lasts until you close Koda. Nothing is renewed yet.")
         }
-        .sheet(isPresented: $showingSignIn) {
-            AppleIDSheet().appEnvironment(app)
+    }
+
+    @ViewBuilder
+    private func appleIDStatus(_ state: AppleSignIn.State) -> some View {
+        switch state {
+        case .signedIn(let address):
+            Label("Signed in", systemImage: "checkmark.seal.fill")
+                .font(.footnote)
+                .foregroundStyle(.green)
+            Text(address)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        case .signingIn, .needsCode:
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Signing in…")
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        case .failed(let message):
+            Text("Not signed in")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(.red)
+        case .signedOut:
+            Text("Not signed in")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
     }
 

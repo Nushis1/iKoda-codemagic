@@ -64,96 +64,14 @@ final class AppleSignIn {
         if state == .needsCode { submit(code: nil) }
     }
 
-    func clearFailure() {
-        if case .failed = state { state = .signedOut }
+    /// Something the form can't send, such as an empty field.
+    func report(_ message: String) {
+        guard !isBusy else { return }
+        state = .failed(message)
     }
 
     func signOut() {
         account = nil
         state = .signedOut
-    }
-}
-
-/// The window that opens from "Log In": the Apple ID and password, then the code Apple sent, in the same window.
-struct AppleIDSheet: View {
-    @Environment(AppModel.self) private var app
-    @Environment(\.dismiss) private var dismiss
-    @AppStorage("koda.renewal.appleID") private var email = ""
-    @State private var password = ""
-    @State private var code = ""
-
-    private var signIn: AppleSignIn { app.appleSignIn }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                switch signIn.state {
-                case .needsCode:
-                    Section {
-                        TextField("6-digit code", text: $code)
-                            .keyboardType(.numberPad)
-                            .textContentType(.oneTimeCode)
-                        Button("Confirm") {
-                            signIn.submit(code: code)
-                            code = ""
-                        }
-                        .disabled(code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    } header: {
-                        Text("Two-factor code")
-                    } footer: {
-                        Text("Apple sent a code to a device or phone number you trust. Type it here.")
-                    }
-                case .signingIn:
-                    Section {
-                        HStack(spacing: 12) {
-                            ProgressView()
-                            Text("Talking to Apple…")
-                        }
-                    }
-                default:
-                    Section {
-                        TextField("Apple ID (e-mail)", text: $email)
-                            .keyboardType(.emailAddress)
-                            .textContentType(.username)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                        SecureField("Password", text: $password)
-                            .textContentType(.password)
-                        Button("Log In") {
-                            let id = email.trimmingCharacters(in: .whitespacesAndNewlines)
-                            let secret = password
-                            password = ""
-                            signIn.signIn(email: id, password: secret)
-                        }
-                        .disabled(email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || password.isEmpty)
-                    } footer: {
-                        Text("Use a separate Apple ID made for this, not your main one. The password goes to Apple through the tool and isn't saved.")
-                    }
-                    if case .failed(let message) = signIn.state {
-                        Section {
-                            Label(message, systemImage: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.red)
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Apple ID")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        signIn.cancelCode()
-                        signIn.clearFailure()
-                        dismiss()
-                    }
-                    .disabled(signIn.state == .signingIn)
-                }
-            }
-            .interactiveDismissDisabled(signIn.isBusy)
-            .onChange(of: signIn.state) { _, state in
-                if case .signedIn = state { dismiss() }
-            }
-        }
-        .presentationDetents([.medium, .large])
     }
 }
