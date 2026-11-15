@@ -237,12 +237,18 @@ struct RenewalSettingsView: View {
                 Color.clear
                     .alert("How Should Apple Send the Code?", isPresented: Binding(get: { signIn.isAskingForMethod }, set: { _ in })) {
                         Button("Trusted Devices") { signIn.answer(.devices) }
-                        ForEach(signIn.request?.numbers ?? []) { number in
-                            Button("Text \(number.label)") { signIn.answer(.sms(number.id)) }
+                        let numbers = signIn.request?.numbers ?? []
+                        if numbers.isEmpty {
+                            // Apple didn't list the trusted numbers; its first one is number 1.
+                            Button("Text My Phone Number") { signIn.answer(.sms(1)) }
+                        } else {
+                            ForEach(numbers) { number in
+                                Button("Text \(number.label)") { signIn.answer(.sms(number.id)) }
+                            }
                         }
                         Button("Cancel", role: .cancel) { signIn.answer(nil) }
                     } message: {
-                        Text("Pick Trusted Devices if the Apple ID is signed in on an iPhone, iPad or Mac. If it only has a phone number, pick the text.")
+                        Text("Pick Trusted Devices if the Apple ID is signed in on an iPhone, iPad or Mac. If it only has a phone number, pick the text. (Apple listed \(signIn.request?.numbers.count ?? 0) phone numbers.)")
                     }
             }
         } header: {

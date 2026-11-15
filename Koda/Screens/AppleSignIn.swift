@@ -21,6 +21,9 @@ final class AppleSignIn {
     /// What Apple offered the last time it asked (the trusted phone numbers, mainly).
     private(set) var request: TwoFactorRequest?
     private var account: RenewerAccount?
+    /// The person cancelled the two-factor question: the library then reports "aborting" as an error,
+    /// which is not one, so it is not shown.
+    private var cancelled = false
     /// What the signed-in Apple ID has in the developer service, once read.
     private(set) var developer: DeveloperInfo?
     private(set) var developerError: String?
@@ -40,6 +43,7 @@ final class AppleSignIn {
     func signIn(email: String, password: String) {
         guard !isBusy else { return }
         state = .signingIn
+        cancelled = false
         Task {
             do {
                 account = try await Renewer.signIn(email: email, password: password) { [weak self] request in
@@ -48,7 +52,7 @@ final class AppleSignIn {
                 state = .signedIn(email)
             } catch {
                 account = nil
-                state = .failed(error.localizedDescription)
+                state = cancelled ? .signedOut : .failed(error.localizedDescription)
             }
         }
     }
@@ -69,6 +73,7 @@ final class AppleSignIn {
             let clean = digits.trimmingCharacters(in: .whitespacesAndNewlines)
             answer = clean.isEmpty ? nil : .code(clean)
         }
+        if answer == nil { cancelled = true }
         state = .signingIn
         pending?.resume(returning: answer)
         pending = nil
