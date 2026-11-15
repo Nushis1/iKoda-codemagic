@@ -25,6 +25,8 @@ final class AppModel {
     let nowPlayingLike: NowPlayingLike
     /// A copy of the library that survives deleting the app (iPhone only; see AutomaticBackup.swift).
     let automaticBackup: AutomaticBackup
+    /// The Apple ID signed in to Koda's renewal tool, kept while the app runs (see AppleSignIn.swift).
+    let appleSignIn = AppleSignIn()
     /// The video player, beside the songs' (Koda/Video).
     let videos: VideoPlayback
     /// The playing song on Discord; the Mac only, where the Discord app takes it from Koda directly.

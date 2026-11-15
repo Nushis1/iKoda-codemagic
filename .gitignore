@@ -6,7 +6,6 @@ DerivedData/
 build/
 .probe/
 *.ipa
-CLAUDE.md
 
 # Scratch work: drafts, artwork, probes. Never committed.
 .scratchpad/
