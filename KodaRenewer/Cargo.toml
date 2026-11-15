@@ -24,6 +24,10 @@ idevice = { git = "https://github.com/jkcoxson/idevice", rev = "7bd551c16c6dd2e0
 # that got furthest (isideload 0.5.2) so a build today is the build tomorrow.
 isideload = { git = "https://github.com/nab138/isideload", rev = "326e5622", default-features = false, features = ["install", "fs-storage", "tokio-mt"] }
 
+# Named directly: the runtime that runs isideload's async calls, and its error type.
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+rootcause = "0.12"
+
 [profile.release]
 opt-level = "z"
 lto = true
