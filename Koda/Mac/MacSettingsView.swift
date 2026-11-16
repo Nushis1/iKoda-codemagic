@@ -848,10 +848,7 @@ private struct MacAboutPane: View {
                     .foregroundStyle(.secondary)
             }
             MacSettingsRow(title: "Koda on GitHub") {
-                Link("Open", destination: URL(string: "https://github.com/Ivorisnoob/Koda-iOS")!)
-            }
-            MacSettingsRow(title: "Koda for Android") {
-                Link("Open", destination: URL(string: "https://github.com/Ivorisnoob/Koda")!)
+                Link("Open", destination: URL(string: "https://github.com/Nushis1/iKoda-codemagic")!)
             }
         }
     }

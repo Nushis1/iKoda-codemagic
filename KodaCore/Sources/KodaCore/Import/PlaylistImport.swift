@@ -336,7 +336,7 @@ public enum TrackMatcher {
     /// Bracketed notes that say nothing about which song it is.
     private static let notes = ["feat", "ft.", "ft ", "featuring", "with ", "remaster", "version", "mono", "stereo", "deluxe", "bonus", "explicit", "official", "from "]
     /// What makes a different recording of the same song: unwanted unless the imported one has it too.
-    private static let versions: Set<String> = ["live", "remix", "cover", "karaoke", "instrumental", "acoustic", "slowed", "sped", "nightcore", "reverb", "8d"]
+    static let versions: Set<String> = ["live", "remix", "cover", "karaoke", "instrumental", "acoustic", "slowed", "sped", "nightcore", "reverb", "8d"]
     private static let filler: Set<String> = ["feat", "ft", "featuring"]
 
     public static func tokens(_ text: String) -> [String] {

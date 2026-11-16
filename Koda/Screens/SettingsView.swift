@@ -213,11 +213,8 @@ struct SettingsView: View {
 
                 Section {
                     LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")
-                    Link(destination: URL(string: "https://github.com/Ivorisnoob/Koda-iOS")!) {
+                    Link(destination: URL(string: "https://github.com/Nushis1/iKoda-codemagic")!) {
                         Label("Koda on GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
-                    }
-                    Link(destination: URL(string: "https://github.com/Ivorisnoob/Koda")!) {
-                        Label("Koda for Android", systemImage: "iphone.gen3")
                     }
                 } header: {
                     Text("About")

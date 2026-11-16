@@ -64,6 +64,7 @@ struct RenewalSettingsView: View {
     @State private var email = UserDefaults.standard.string(forKey: "koda.renewal.appleID") ?? ""
     @State private var password = ""
     @State private var code = ""
+    @FocusState private var codeFocused: Bool
 
     var body: some View {
         Form {
@@ -172,98 +173,175 @@ struct RenewalSettingsView: View {
     private var appleID: some View {
         let signIn = app.appleSignIn
         return Section {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Apple ID")
-                    appleIDStatus(signIn.state)
+            switch signIn.state {
+            case .signedIn(let address):
+                signedInCard(address, signIn)
+            case .signingIn:
+                HStack(spacing: 12) {
+                    ProgressView()
+                    Text("Talking to Apple…")
+                        .foregroundStyle(.secondary)
                 }
-                // Like the alert for a new playlist: the Apple ID and the password, then Log In.
-                .alert("Apple ID", isPresented: $showingLogin) {
-                    TextField("Apple ID (e-mail)", text: $email)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    SecureField("Password", text: $password)
-                    Button("Log In") {
-                        let id = email.trimmingCharacters(in: .whitespacesAndNewlines)
-                        let secret = password
-                        password = ""
-                        guard !id.isEmpty, !secret.isEmpty else {
-                            signIn.report("Enter the Apple ID and the password.")
-                            return
-                        }
-                        UserDefaults.standard.set(id, forKey: "koda.renewal.appleID")
-                        signIn.signIn(email: id, password: secret)
-                    }
-                    Button("Cancel", role: .cancel) { password = "" }
-                } message: {
-                    Text("Use a separate Apple ID made for this, not your main one. The password isn't saved.")
-                }
-                Spacer()
-                switch signIn.state {
-                case .signedIn:
-                    Button("Log Out", role: .destructive) { signIn.signOut() }
-                        .buttonStyle(.bordered)
-                case .signingIn, .needsMethod, .needsCode:
-                    EmptyView()
-                case .signedOut, .failed:
-                    Button("Log In") { showingLogin = true }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!Renewer.isAvailable)
-                }
-            }
-            // Apple's two-factor code, asked for in the same way once the password is accepted.
-            .alert("Verification Code", isPresented: Binding(get: { signIn.isAskingForCode }, set: { _ in })) {
-                TextField("6-digit code", text: $code)
-                    .keyboardType(.numberPad)
-                Button("Confirm") {
-                    signIn.answer(.code(code))
-                    code = ""
-                }
-                // For an Apple ID with only a phone number: send the code by text, whatever Apple assumed.
-                Button("Text Me a Code") {
-                    let id = signIn.request?.selectedNumber ?? signIn.request?.numbers.first?.id ?? 1
-                    signIn.answer(.sms(id))
-                    code = ""
-                }
-                Button("Send Again") {
-                    signIn.answer(.resend)
-                    code = ""
-                }
-                Button("Cancel", role: .cancel) {
-                    signIn.answer(nil)
-                    code = ""
-                }
-            } message: {
-                Text(signIn.request?.sms == true
-                     ? "Apple says the code went by text. Type the newest one. Send Again repeats it."
-                     : "Apple says the code went to your trusted devices, if the Apple ID has any. If it only has a phone number, tap Text Me a Code.")
-            }
-            // Before the code: how it should reach the person. A phone-only Apple ID has no trusted device,
-            // so its codes come by text, and a code sent by text is not accepted as a device code.
-            .background {
-                Color.clear
-                    .alert("How Should Apple Send the Code?", isPresented: Binding(get: { signIn.isAskingForMethod }, set: { _ in })) {
-                        Button("Trusted Devices") { signIn.answer(.devices) }
-                        let numbers = signIn.request?.numbers ?? []
-                        if numbers.isEmpty {
-                            // Apple didn't list the trusted numbers; its first one is number 1.
-                            Button("Text My Phone Number") { signIn.answer(.sms(1)) }
-                        } else {
-                            ForEach(numbers) { number in
-                                Button("Text \(number.label)") { signIn.answer(.sms(number.id)) }
-                            }
-                        }
-                        Button("Cancel", role: .cancel) { signIn.answer(nil) }
-                    } message: {
-                        Text("Pick Trusted Devices if the Apple ID is signed in on an iPhone, iPad or Mac. If it only has a phone number, pick the text. (Apple listed \(signIn.request?.numbers.count ?? 0) phone numbers.)")
-                    }
+            case .needsMethod:
+                methodChoice(signIn)
+            case .needsCode:
+                codeEntry(signIn)
+            case .signedOut, .failed:
+                signedOutRow(signIn)
             }
         } header: {
             Text("Apple ID (experimental)")
         } footer: {
             Text("Koda's own renewal tool signs in to an Apple ID, which should be a separate one made for this. The session lasts until you close Koda. Nothing is renewed yet.")
         }
+    }
+
+    private func signedOutRow(_ signIn: AppleSignIn) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Apple ID")
+                Text("Not signed in")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                if case .failed(let message) = signIn.state {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+            }
+            Spacer()
+            Button("Log In") { showingLogin = true }
+                .buttonStyle(.borderedProminent)
+                .disabled(!Renewer.isAvailable)
+        }
+        // Like the alert for a new playlist: the Apple ID and the password, then Log In.
+        .alert("Apple ID", isPresented: $showingLogin) {
+            TextField("Apple ID (e-mail)", text: $email)
+                .keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            SecureField("Password", text: $password)
+            Button("Log In") {
+                let id = email.trimmingCharacters(in: .whitespacesAndNewlines)
+                let secret = password
+                password = ""
+                guard !id.isEmpty, !secret.isEmpty else {
+                    signIn.report("Enter the Apple ID and the password.")
+                    return
+                }
+                UserDefaults.standard.set(id, forKey: "koda.renewal.appleID")
+                signIn.signIn(email: id, password: secret)
+            }
+            Button("Cancel", role: .cancel) { password = "" }
+        } message: {
+            Text("Use a separate Apple ID made for this, not your main one. The password isn't saved.")
+        }
+    }
+
+    private func signedInCard(_ address: String, _ signIn: AppleSignIn) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: "checkmark.seal.fill")
+                .font(.title3)
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(.green.gradient, in: .circle)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(address)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Text("Signed in to Apple")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            Button("Log Out", role: .destructive) { signIn.signOut() }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+        }
+        .padding(.vertical, 4)
+    }
+
+    /// Apple asks how the code should reach the person. Inline rows, not an alert full of buttons.
+    @ViewBuilder
+    private func methodChoice(_ signIn: AppleSignIn) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("How should Apple send the code?")
+                .font(.subheadline.weight(.semibold))
+            Text("Pick the text if the Apple ID only has a phone number.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        let numbers = signIn.request?.numbers ?? []
+        if numbers.isEmpty {
+            // Apple didn't list the trusted numbers; its first one is number 1.
+            Button { signIn.answer(.sms(1)) } label: {
+                Label("Text my phone number", systemImage: "message.fill")
+            }
+        } else {
+            ForEach(numbers) { number in
+                Button { signIn.answer(.sms(number.id)) } label: {
+                    Label("Text \(number.label)", systemImage: "message.fill")
+                }
+            }
+        }
+        Button { signIn.answer(.devices) } label: {
+            Label("Trusted devices", systemImage: "iphone.gen3")
+        }
+        Button("Cancel", role: .cancel) { signIn.answer(nil) }
+            .foregroundStyle(.secondary)
+    }
+
+    /// The code, typed in the row itself, with the ways to ask for another one tucked into a menu.
+    private func codeEntry(_ signIn: AppleSignIn) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Enter the code from Apple")
+                    .font(.subheadline.weight(.semibold))
+                Text(signIn.request?.sms == true
+                     ? "Apple sent it by text."
+                     : "Apple says it went to your trusted devices, if the Apple ID has any.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            TextField("6-digit code", text: $code)
+                .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
+                .font(.title2.monospacedDigit())
+                .focused($codeFocused)
+            HStack(spacing: 10) {
+                Button("Confirm") {
+                    signIn.answer(.code(code))
+                    code = ""
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Menu {
+                    // For an Apple ID with only a phone number: by text, whatever Apple assumed.
+                    Button("Text me a code", systemImage: "message") {
+                        let id = signIn.request?.selectedNumber ?? signIn.request?.numbers.first?.id ?? 1
+                        signIn.answer(.sms(id))
+                        code = ""
+                    }
+                    Button("Send again", systemImage: "arrow.clockwise") {
+                        signIn.answer(.resend)
+                        code = ""
+                    }
+                } label: {
+                    Text("No code?")
+                }
+                .buttonStyle(.bordered)
+                Spacer()
+                Button("Cancel", role: .cancel) {
+                    signIn.answer(nil)
+                    code = ""
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+        .onAppear { codeFocused = true }
     }
 
     /// What the signed-in Apple ID has at Apple's developer service: a first read-only check that the
@@ -274,9 +352,14 @@ struct RenewalSettingsView: View {
             Button {
                 signIn.readDeveloperAccount()
             } label: {
-                HStack(spacing: 8) {
-                    if signIn.isReading { ProgressView().controlSize(.small) }
+                Label {
                     Text(signIn.developer == nil ? "Read Developer Account" : "Read Again")
+                } icon: {
+                    if signIn.isReading {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                    }
                 }
             }
             .disabled(signIn.isReading)
@@ -290,31 +373,7 @@ struct RenewalSettingsView: View {
                     Text("This Apple ID has no developer team yet.")
                         .foregroundStyle(.secondary)
                 }
-                ForEach(developer.teams) { team in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(team.name ?? "Team")
-                            .font(.headline)
-                        Text("Team ID \(team.teamId)" + (team.type.map { " · \($0)" } ?? ""))
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        let ids = team.appIDs
-                        Text("App IDs: \(ids.used) used" + (ids.available.map { ", \($0) available" } ?? "")
-                             + (ids.max.map { " of \($0)" } ?? ""))
-                            .font(.footnote)
-                        if team.certificates.isEmpty {
-                            Text("No development certificates.")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                        ForEach(team.certificates) { certificate in
-                            Text((certificate.machine ?? certificate.name ?? "Certificate")
-                                 + (certificate.expires.map { " · until \($0)" } ?? ""))
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.vertical, 2)
-                }
+                ForEach(developer.teams) { team in teamCard(team) }
             }
         } header: {
             Text("Developer account (experimental)")
@@ -323,35 +382,56 @@ struct RenewalSettingsView: View {
         }
     }
 
-    @ViewBuilder
-    private func appleIDStatus(_ state: AppleSignIn.State) -> some View {
-        switch state {
-        case .signedIn(let address):
-            Label("Signed in", systemImage: "checkmark.seal.fill")
-                .font(.footnote)
-                .foregroundStyle(.green)
-            Text(address)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        case .signingIn, .needsMethod, .needsCode:
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small)
-                Text("Signing in…")
+    private func teamCard(_ team: DeveloperInfo.Team) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(team.name ?? "Team")
+                    .font(.headline)
+                Text(team.teamId + (team.type.map { " · \($0)" } ?? ""))
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
             }
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-        case .failed(let message):
-            Text("Not signed in")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            Text(message)
-                .font(.footnote)
-                .foregroundStyle(.red)
-        case .signedOut:
-            Text("Not signed in")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            let ids = team.appIDs
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Label("App IDs", systemImage: "app.badge")
+                    Spacer()
+                    Text(ids.max.map { "\(ids.used) of \($0) used" } ?? "\(ids.used) used")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.subheadline)
+                if let max = ids.max, max > 0 {
+                    ProgressView(value: Double(min(ids.used, max)), total: Double(max))
+                        .tint(ids.used >= max ? .red : .accentColor)
+                }
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Certificates", systemImage: "checkmark.seal")
+                    .font(.subheadline)
+                if team.certificates.isEmpty {
+                    Text("None yet")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(team.certificates) { certificate in
+                    HStack {
+                        Text(certificate.machine ?? certificate.name ?? "Certificate")
+                        Spacer()
+                        Text(expiry(certificate.expires))
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.footnote)
+                }
+            }
         }
+        .padding(.vertical, 6)
+    }
+
+    /// "until 20 Nov 2026" from Apple's date, or what Apple sent when it isn't one.
+    private func expiry(_ text: String?) -> String {
+        guard let text else { return "" }
+        guard let date = ISO8601DateFormatter().date(from: text) else { return text }
+        return "until " + date.formatted(date: .abbreviated, time: .omitted)
     }
 
     private var reminders: some View {

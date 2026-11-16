@@ -19,6 +19,8 @@ struct UserPlaylistView: View {
     @State private var confirmDelete = false
     @State private var editMode: EditMode = .inactive
     @State private var query = ""
+    /// Showing only the songs that look like another song of the list (the menu's Find Duplicates).
+    @State private var duplicatesOnly = false
 
     var body: some View {
         if let playlist = library.userPlaylist(id) {
@@ -37,6 +39,9 @@ struct UserPlaylistView: View {
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 12, trailing: 20))
 
+            if duplicatesOnly {
+                duplicatesContent(playlist)
+            } else {
             // While finding, rows are the matches: offsets no longer point into the playlist, so
             // moving and deleting wait until the search is cleared.
             let finding = !query.isEmpty
@@ -59,6 +64,7 @@ struct UserPlaylistView: View {
                 ContentUnavailableView.search(text: query)
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
+            }
             }
 
             if playlist.songs.isEmpty {
@@ -107,6 +113,13 @@ struct UserPlaylistView: View {
                         Button("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") { player.playNext(playlist.songs) }
                         Button("Add to Queue", systemImage: "text.line.last.and.arrowtriangle.forward") { player.addToQueue(playlist.songs) }
                     }
+                    if playlist.songs.count > 1 {
+                        Button(duplicatesOnly ? "Show All Songs" : "Find Duplicates",
+                               systemImage: duplicatesOnly ? "music.note.list" : "square.on.square") {
+                            query = ""
+                            withAnimation { duplicatesOnly.toggle() }
+                        }
+                    }
                     PinMenuItem(pin: .userPlaylist(playlist.id))
                     Button("Delete Playlist", systemImage: "trash", role: .destructive) { confirmDelete = true }
                 }
@@ -126,6 +139,68 @@ struct UserPlaylistView: View {
         } message: {
             Text("The songs stay wherever else you saved them.")
         }
+    }
+
+    /// Only the songs that look like another song of the playlist, in groups: the other songs are hidden.
+    /// A song can be taken out with a swipe; a long press keeps this one and takes out the rest of its group.
+    @ViewBuilder
+    private func duplicatesContent(_ playlist: UserPlaylist) -> some View {
+        let groups = DuplicateFinder.groups(in: playlist.songs)
+        let count = groups.reduce(0) { $0 + $1.songs.count }
+        Section {
+            HStack(spacing: 12) {
+                Image(systemName: "square.on.square")
+                    .foregroundStyle(.tint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(groups.isEmpty ? "No duplicates found" : "\(count) songs in \(groups.count) \(groups.count == 1 ? "group" : "groups")")
+                        .font(.subheadline.weight(.semibold))
+                    Text(groups.isEmpty ? "No song has a twin by name." : "Songs with the same name, or a name that differs only by a mark such as Remix or Live.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Show All") { withAnimation { duplicatesOnly = false } }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+        }
+        ForEach(groups) { group in
+            Section {
+                ForEach(group.songs) { song in
+                    SongRow(song: song) {
+                        player.play(playlist.songs, startAt: playlist.songs.firstIndex { $0.id == song.id } ?? 0)
+                    }
+                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 12))
+                    .listRowSeparator(.hidden)
+                    .swipeActions(edge: .trailing) {
+                        Button("Remove", systemImage: "trash", role: .destructive) { remove([song.id], from: playlist) }
+                    }
+                    .contextMenu {
+                        Button("Keep Only This One", systemImage: "checkmark.circle") {
+                            remove(group.songs.map(\.id).filter { $0 != song.id }, from: playlist)
+                        }
+                        Button("Remove from Playlist", systemImage: "trash", role: .destructive) {
+                            remove([song.id], from: playlist)
+                        }
+                    }
+                }
+            } header: {
+                Label(group.kind == .same ? "Same song" : "Similar names",
+                      systemImage: group.kind == .same ? "equal.circle" : "plusminus.circle")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(nil)
+            }
+        }
+    }
+
+    private func remove(_ ids: [String], from playlist: UserPlaylist) {
+        let gone = Set(ids)
+        let offsets = IndexSet(playlist.songs.indices.filter { gone.contains(playlist.songs[$0].id) })
+        guard !offsets.isEmpty else { return }
+        library.removeSongs(atOffsets: offsets, fromPlaylist: id)
     }
 
     /// The Mac's playlist page: the mosaic beside the name, songs in columns, and each song's
