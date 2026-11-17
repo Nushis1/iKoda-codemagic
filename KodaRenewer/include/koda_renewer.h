@@ -15,7 +15,8 @@ typedef struct KodaAccount KodaAccount;
 
 /// Asked about two-factor sign-in. `request` is JSON: {"needsMethod","sms","selectedNumber","numbers":[{"id","label","mode"}]}.
 /// Write the answer into `buffer` (UTF-8, NUL-ended, at most `capacity` bytes) and return true, or
-/// return false to cancel. The answer is `devices`, `sms:<id>`, `resend` or `code:<digits>`.
+/// return false to cancel. The answer is `devices`, `sms:<id>`, `resend`, `method` (ask again how to
+/// send the code) or `code:<digits>`.
 /// Called on a background thread; may block.
 typedef bool (*KodaCodeCallback)(void *user, const char *request, char *buffer, size_t capacity);
 

@@ -38,6 +38,8 @@ public enum TwoFactorAnswer: Sendable {
     case devices
     case sms(UInt32)
     case resend
+    /// Go back and choose again how the code is sent.
+    case changeMethod
     case code(String)
 
     fileprivate var wire: String {
@@ -45,6 +47,7 @@ public enum TwoFactorAnswer: Sendable {
         case .devices: "devices"
         case .sms(let id): "sms:\(id)"
         case .resend: "resend"
+        case .changeMethod: "method"
         case .code(let digits): "code:\(digits)"
         }
     }

@@ -21,6 +21,8 @@ struct UserPlaylistView: View {
     @State private var query = ""
     /// Showing only the songs that look like another song of the list (the menu's Find Duplicates).
     @State private var duplicatesOnly = false
+    /// The Suggested Songs screen, from the menu.
+    @State private var showingSuggestions = false
 
     var body: some View {
         if let playlist = library.userPlaylist(id) {
@@ -113,6 +115,9 @@ struct UserPlaylistView: View {
                         Button("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") { player.playNext(playlist.songs) }
                         Button("Add to Queue", systemImage: "text.line.last.and.arrowtriangle.forward") { player.addToQueue(playlist.songs) }
                     }
+                    if !playlist.songs.isEmpty {
+                        Button("Suggested Songs", systemImage: "sparkles") { showingSuggestions = true }
+                    }
                     if playlist.songs.count > 1 {
                         Button(duplicatesOnly ? "Show All Songs" : "Find Duplicates",
                                systemImage: duplicatesOnly ? "music.note.list" : "square.on.square") {
@@ -125,6 +130,7 @@ struct UserPlaylistView: View {
                 }
             }
         }
+        .navigationDestination(isPresented: $showingSuggestions) { SuggestedSongsView(id: id) }
         .onChange(of: photo) { _, item in
             guard let item else { return }
             Task { await setPhoto(from: item) }
@@ -154,7 +160,7 @@ struct UserPlaylistView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(groups.isEmpty ? "No duplicates found" : "\(count) songs in \(groups.count) \(groups.count == 1 ? "group" : "groups")")
                         .font(.subheadline.weight(.semibold))
-                    Text(groups.isEmpty ? "No song has a twin by name." : "Songs with the same name, or a name that differs only by a mark such as Remix or Live.")
+                    Text(groups.isEmpty ? "No song has a twin by name." : "The same name, a name that differs by a mark such as Remix or Live, or one name inside another.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -178,21 +184,33 @@ struct UserPlaylistView: View {
                         Button("Remove", systemImage: "trash", role: .destructive) { remove([song.id], from: playlist) }
                     }
                     .contextMenu {
-                        Button("Keep Only This One", systemImage: "checkmark.circle") {
-                            remove(group.songs.map(\.id).filter { $0 != song.id }, from: playlist)
-                        }
                         Button("Remove from Playlist", systemImage: "trash", role: .destructive) {
                             remove([song.id], from: playlist)
                         }
                     }
                 }
             } header: {
-                Label(group.kind == .same ? "Same song" : "Similar names",
-                      systemImage: group.kind == .same ? "equal.circle" : "plusminus.circle")
+                Label(label(for: group.kind), systemImage: symbol(for: group.kind))
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .textCase(nil)
             }
+        }
+    }
+
+    private func label(for kind: DuplicateGroup.Kind) -> String {
+        switch kind {
+        case .same: "Same song"
+        case .similar: "Similar names"
+        case .possible: "Possible duplicate"
+        }
+    }
+
+    private func symbol(for kind: DuplicateGroup.Kind) -> String {
+        switch kind {
+        case .same: "equal.circle"
+        case .similar: "plusminus.circle"
+        case .possible: "questionmark.circle"
         }
     }
 

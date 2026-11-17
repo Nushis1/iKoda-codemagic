@@ -8,7 +8,8 @@
 use std::ffi::{c_char, c_void, CStr};
 use std::path::PathBuf;
 use std::panic::{self, AssertUnwindSafe};
-use std::sync::{Mutex, Once, OnceLock};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, Once, OnceLock};
 
 use isideload::anisette::remote_v3::RemoteV3AnisetteProvider;
 use isideload::auth::apple_account::{AppleAccount, TwoFactorCallbackParams, TwoFactorCallbackResponse};
@@ -113,7 +114,8 @@ impl Context {
 }
 
 /// What Apple offers, as JSON for Swift.
-fn describe(params: &TwoFactorCallbackParams) -> String {
+/// `force_method` makes Swift ask HOW the code should be sent, whatever Apple already assumes.
+fn describe(params: &TwoFactorCallbackParams, force_method: bool) -> String {
     let numbers: Vec<serde_json::Value> = params
         .numbers
         .iter()
@@ -126,7 +128,7 @@ fn describe(params: &TwoFactorCallbackParams) -> String {
         })
         .collect();
     serde_json::json!({
-        "needsMethod": params.unknown,
+        "needsMethod": force_method || params.unknown,
         "sms": params.sms,
         "selectedNumber": params.selected_number_id,
         "numbers": numbers,
@@ -202,7 +204,9 @@ pub unsafe extern "C" fn koda_renewer_login(
     let context = Context { callback, user };
     // isideload asks the callback more than once: first HOW the code is to reach the person (the
     // trusted devices, or an SMS to one of the trusted numbers), and only then for the code itself
-    // ("Cannot submit code without knowing which method to use"). Swift asks the person each time.
+    // ("Cannot submit code without knowing which method to use"). The first question is always the
+    // method, so the person chooses before anything is sent; Swift asks them each time.
+    let calls = Arc::new(AtomicUsize::new(0));
     // A panic anywhere in the sign-in would take the whole app down; it is caught and reported instead.
     let outcome = panic::catch_unwind(AssertUnwindSafe(|| {
         runtime().block_on(async move {
@@ -212,11 +216,22 @@ pub unsafe extern "C" fn koda_renewer_login(
             AppleAccount::builder(&email)
                 .anisette_provider(provider)
                 .login(&password, move |params| {
-                    let request = describe(&params);
+                    let first = calls.fetch_add(1, Ordering::SeqCst) == 0;
+                    let request = describe(&params, first);
+                    let method_request = describe(&params, true);
                     async move {
-                        // Swift waits for the person to answer, so this must not hold up an async worker.
-                        let reply = tokio::task::spawn_blocking(move || context.ask(&request)).await.ok().flatten();
-                        Ok::<TwoFactorCallbackResponse, Report>(answer_from(reply))
+                        let mut request = request;
+                        loop {
+                            let ask = request.clone();
+                            // Swift waits for the person to answer, so this must not hold up an async worker.
+                            let reply = tokio::task::spawn_blocking(move || context.ask(&ask)).await.ok().flatten();
+                            // "Change method" from the code window: ask for the method again.
+                            if reply.as_deref() == Some("method") {
+                                request = method_request.clone();
+                                continue;
+                            }
+                            return Ok::<TwoFactorCallbackResponse, Report>(answer_from(reply));
+                        }
                     }
                 })
                 .await

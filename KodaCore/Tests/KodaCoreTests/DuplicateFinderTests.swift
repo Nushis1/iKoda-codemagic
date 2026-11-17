@@ -33,9 +33,38 @@ import Testing
         #expect(groups.first?.kind == .same)
     }
 
-    @Test func theSameTitleByAnotherArtistIsAnotherSong() {
+    @Test func theSameTitleByAnotherArtistIsOnlyAPossibleDuplicate() {
         let groups = DuplicateFinder.groups(in: [song("a", "Intro", "Alpha"), song("b", "Intro", "Beta")])
-        #expect(groups.isEmpty)
+        #expect(groups.count == 1)
+        #expect(groups.first?.kind == .possible)
+    }
+
+    @Test func aNameInsideALongerOneIsAPossibleDuplicateWhoeverTheArtist() {
+        let groups = DuplicateFinder.groups(in: [
+            song("a", "Nowe Ciocie", "Xzy"),
+            song("b", "Nowe Ciocie x Looping the Rooms", "Piz"),
+            song("c", "Something Else", "Xzy"),
+        ])
+        #expect(groups.count == 1)
+        #expect(groups.first?.kind == .possible)
+        #expect(groups.first?.songs.map(\.id) == ["a", "b"])
+    }
+
+    @Test func aSingleWordInsideAnotherNameIsNotEnough() {
+        #expect(DuplicateFinder.groups(in: [song("a", "Love", "Alpha"), song("b", "Love Story", "Beta")]).isEmpty)
+    }
+
+    @Test func everyCopyEndsUpInOneGroup() {
+        let groups = DuplicateFinder.groups(in: [
+            song("a", "Song", "Alpha"),
+            song("b", "SONG", "Alpha"),
+            song("c", "song (Remix)", "Alpha"),
+            song("d", "Song - Live", "Alpha"),
+            song("e", "Song", "Beta"),
+            song("f", "Unrelated", "Alpha"),
+        ])
+        #expect(groups.count == 1)
+        #expect(groups.first?.songs.map(\.id) == ["a", "b", "c", "d", "e"])
     }
 
     @Test func groupsKeepTheListsOrderAndLeaveSinglesOut() {

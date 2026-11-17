@@ -64,7 +64,6 @@ struct RenewalSettingsView: View {
     @State private var email = UserDefaults.standard.string(forKey: "koda.renewal.appleID") ?? ""
     @State private var password = ""
     @State private var code = ""
-    @FocusState private var codeFocused: Bool
 
     var body: some View {
         Form {
@@ -176,16 +175,8 @@ struct RenewalSettingsView: View {
             switch signIn.state {
             case .signedIn(let address):
                 signedInCard(address, signIn)
-            case .signingIn:
-                HStack(spacing: 12) {
-                    ProgressView()
-                    Text("Talking to Apple…")
-                        .foregroundStyle(.secondary)
-                }
-            case .needsMethod:
-                methodChoice(signIn)
-            case .needsCode:
-                codeEntry(signIn)
+            case .signingIn, .needsMethod, .needsCode:
+                waitingRow(signIn)
             case .signedOut, .failed:
                 signedOutRow(signIn)
             }
@@ -262,86 +253,54 @@ struct RenewalSettingsView: View {
         .padding(.vertical, 4)
     }
 
-    /// Apple asks how the code should reach the person. Inline rows, not an alert full of buttons.
-    @ViewBuilder
-    private func methodChoice(_ signIn: AppleSignIn) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("How should Apple send the code?")
-                .font(.subheadline.weight(.semibold))
-            Text("Pick the text if the Apple ID only has a phone number.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        let numbers = signIn.request?.numbers ?? []
-        if numbers.isEmpty {
-            // Apple didn't list the trusted numbers; its first one is number 1.
-            Button { signIn.answer(.sms(1)) } label: {
-                Label("Text my phone number", systemImage: "message.fill")
-            }
-        } else {
-            ForEach(numbers) { number in
-                Button { signIn.answer(.sms(number.id)) } label: {
-                    Label("Text \(number.label)", systemImage: "message.fill")
-                }
-            }
-        }
-        Button { signIn.answer(.devices) } label: {
-            Label("Trusted devices", systemImage: "iphone.gen3")
-        }
-        Button("Cancel", role: .cancel) { signIn.answer(nil) }
-            .foregroundStyle(.secondary)
-    }
-
-    /// The code, typed in the row itself, with the ways to ask for another one tucked into a menu.
-    private func codeEntry(_ signIn: AppleSignIn) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Enter the code from Apple")
-                    .font(.subheadline.weight(.semibold))
-                Text(signIn.request?.sms == true
-                     ? "Apple sent it by text."
-                     : "Apple says it went to your trusted devices, if the Apple ID has any.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            TextField("6-digit code", text: $code)
-                .keyboardType(.numberPad)
-                .textContentType(.oneTimeCode)
-                .font(.title2.monospacedDigit())
-                .focused($codeFocused)
-            HStack(spacing: 10) {
-                Button("Confirm") {
-                    signIn.answer(.code(code))
-                    code = ""
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                Menu {
-                    // For an Apple ID with only a phone number: by text, whatever Apple assumed.
-                    Button("Text me a code", systemImage: "message") {
-                        let id = signIn.request?.selectedNumber ?? signIn.request?.numbers.first?.id ?? 1
-                        signIn.answer(.sms(id))
+    /// While Apple is being talked to. The two questions Apple has, in order, come up from here: first
+    /// how the code should be sent (nothing is sent before the person chooses), then, in a window of its
+    /// own, the code. They hang on different parts of the row because one view can't carry both.
+    private func waitingRow(_ signIn: AppleSignIn) -> some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .alert("Enter the Code", isPresented: Binding(get: { signIn.isAskingForCode }, set: { shown in
+                    if !shown, signIn.isAskingForCode { signIn.answer(nil) }
+                })) {
+                    TextField("6-digit code", text: $code)
+                        .keyboardType(.numberPad)
+                        .textContentType(.oneTimeCode)
+                    Button("Confirm") {
+                        signIn.answer(.code(code))
                         code = ""
                     }
-                    Button("Send again", systemImage: "arrow.clockwise") {
-                        signIn.answer(.resend)
+                    Button("Change Method", role: .cancel) {
+                        signIn.answer(.changeMethod)
                         code = ""
                     }
-                } label: {
-                    Text("No code?")
+                } message: {
+                    Text(signIn.request?.sms == true
+                         ? "Apple sent the code by text. Type the newest one."
+                         : "Apple sent the code to your trusted devices. Type the newest one.")
                 }
-                .buttonStyle(.bordered)
-                Spacer()
-                Button("Cancel", role: .cancel) {
-                    signIn.answer(nil)
-                    code = ""
-                }
-                .buttonStyle(.borderless)
+            Text(signIn.isAskingForMethod ? "Waiting for your choice…"
+                 : signIn.isAskingForCode ? "Waiting for the code…" : "Talking to Apple…")
                 .foregroundStyle(.secondary)
-            }
         }
-        .padding(.vertical, 4)
-        .onAppear { codeFocused = true }
+        .confirmationDialog("How should Apple send the code?",
+                            isPresented: Binding(get: { signIn.isAskingForMethod }, set: { shown in
+                                if !shown, signIn.isAskingForMethod { signIn.answer(nil) }
+                            }),
+                            titleVisibility: .visible) {
+            let numbers = signIn.request?.numbers ?? []
+            if numbers.isEmpty {
+                // Apple didn't list the trusted numbers; its first one is number 1.
+                Button("Text My Phone Number") { signIn.answer(.sms(1)) }
+            } else {
+                ForEach(numbers) { number in
+                    Button("Text \(number.label)") { signIn.answer(.sms(number.id)) }
+                }
+            }
+            Button("Trusted Devices") { signIn.answer(.devices) }
+            Button("Cancel", role: .cancel) { signIn.answer(nil) }
+        } message: {
+            Text("The code is sent once you choose. Apple may already have sent one when the password was accepted; use the newest.")
+        }
     }
 
     /// What the signed-in Apple ID has at Apple's developer service: a first read-only check that the
