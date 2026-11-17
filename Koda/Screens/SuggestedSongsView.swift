@@ -11,6 +11,9 @@ struct SuggestedSongsView: View {
     @Environment(Library.self) private var library
     @State private var phase = Phase.loading
     @State private var added = 0
+    /// What a Refresh must not repeat: the playlist songs already asked about and the suggestions already shown.
+    @State private var usedSeeds = Set<String>()
+    @State private var seenSongs = Set<String>()
 
     private enum Phase {
         case loading
@@ -34,7 +37,7 @@ struct SuggestedSongsView: View {
                 } description: {
                     Text(message)
                 } actions: {
-                    Button("Try Again") { Task { await load() } }
+                    Button("Try Again") { Task { await load(refresh: false) } }
                 }
             case .loaded(let result):
                 list(result)
@@ -44,18 +47,33 @@ struct SuggestedSongsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button("Refresh", systemImage: "arrow.clockwise") { Task { await load() } }
+                Button("Refresh", systemImage: "arrow.clockwise") { Task { await load(refresh: true) } }
             }
         }
         .sensoryFeedback(.success, trigger: added)
-        .task { await load() }
+        .task { await load(refresh: false) }
     }
 
-    private func load() async {
+    /// A refresh asks about other songs of the playlist and leaves out what was already shown, so what
+    /// comes up is new. When nothing new is left, it starts over with everything.
+    private func load(refresh: Bool) async {
         guard let playlist = library.userPlaylist(id) else { return }
         phase = .loading
+        if !refresh {
+            usedSeeds = []
+            seenSongs = []
+        }
         do {
-            phase = .loaded(try await PlaylistSuggester.suggest(for: playlist.songs, music: app.music))
+            var result = try await PlaylistSuggester.suggest(
+                for: playlist.songs, music: app.music, skippingSeeds: usedSeeds, skippingSongs: seenSongs)
+            if result.suggestions.isEmpty, !seenSongs.isEmpty {
+                usedSeeds = []
+                seenSongs = []
+                result = try await PlaylistSuggester.suggest(for: playlist.songs, music: app.music)
+            }
+            usedSeeds.formUnion(result.seedIDs)
+            seenSongs.formUnion(result.suggestions.map(\.id))
+            phase = .loaded(result)
         } catch {
             phase = .failed(error.localizedDescription)
         }
@@ -78,7 +96,7 @@ struct SuggestedSongsView: View {
                      ? "Add a few songs to this playlist first."
                      : "Nothing new came up. Refresh to ask about other songs of the playlist.")
             } actions: {
-                Button("Refresh") { Task { await load() } }
+                Button("Refresh") { Task { await load(refresh: true) } }
             }
         } else {
             List {
@@ -104,8 +122,6 @@ struct SuggestedSongsView: View {
                 } header: {
                     Text("Based on \(result.seedCount) \(result.seedCount == 1 ? "song" : "songs") of this playlist")
                         .textCase(nil)
-                } footer: {
-                    Text("Songs that YouTube Music's radio returns for the songs of this playlist; the ones that came up most often are first. It follows style and mood, and doesn't know tempo.")
                 }
             }
             .listStyle(.plain)

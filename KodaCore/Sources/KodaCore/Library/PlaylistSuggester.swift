@@ -13,12 +13,20 @@ public struct SuggestionResult: Sendable {
     public let suggestions: [SongSuggestion]
     /// How many songs of the playlist were used to find them.
     public let seedCount: Int
+    /// The playlist songs that were asked about, so that the next try can ask about others.
+    public let seedIDs: [String]
 }
 
 /// Songs that suit a playlist: a few of its songs are picked, YouTube Music's radio is asked for what
 /// goes with each, and the songs that come up most often win. That follows the style and the mood as
 /// YouTube Music hears them; tempo is not known to it, so it only shows through the radios.
 public enum PlaylistSuggester {
+    /// The songs a new pick is made from: those not asked about last time, unless too few are left.
+    static func seedPool(_ playlist: [Song], skipping used: Set<String>, count: Int) -> [Song] {
+        let fresh = playlist.filter { !used.contains($0.id) }
+        return fresh.count >= min(count, playlist.count) ? fresh : playlist
+    }
+
     /// A few of the playlist's songs to ask about; different ones each time.
     public static func pickSeeds<G: RandomNumberGenerator>(from songs: [Song], count: Int, using generator: inout G) -> [Song] {
         Array(songs.shuffled(using: &generator).prefix(max(0, count)))
@@ -79,11 +87,16 @@ public enum PlaylistSuggester {
 
     /// Asks the radios of a few of the playlist's songs, at the same time, and ranks what comes back.
     /// A radio that fails is skipped; it throws only when none answered.
-    public static func suggest(for playlist: [Song], music: YouTubeMusic, seedCount: Int = 5,
-                               limit: Int = 40) async throws -> SuggestionResult {
-        guard !playlist.isEmpty else { return SuggestionResult(suggestions: [], seedCount: 0) }
+    ///
+    /// - Parameters:
+    ///   - skippingSeeds: playlist songs that were asked about before; others are chosen if enough remain.
+    ///   - skippingSongs: suggestions that were shown before, so a refresh brings new ones.
+    public static func suggest(for playlist: [Song], music: YouTubeMusic, seedCount: Int = 5, limit: Int = 40,
+                               skippingSeeds: Set<String> = [], skippingSongs: Set<String> = []) async throws -> SuggestionResult {
+        guard !playlist.isEmpty else { return SuggestionResult(suggestions: [], seedCount: 0, seedIDs: []) }
         var generator = SystemRandomNumberGenerator()
-        let seeds = pickSeeds(from: playlist, count: seedCount, using: &generator)
+        let seeds = pickSeeds(from: seedPool(playlist, skipping: skippingSeeds, count: seedCount),
+                              count: seedCount, using: &generator)
         var radios: [[Song]] = []
         var failure: Error?
         await withTaskGroup(of: Result<[Song], Error>.self) { group in
@@ -104,6 +117,8 @@ public enum PlaylistSuggester {
             }
         }
         if radios.isEmpty, let failure { throw failure }
-        return SuggestionResult(suggestions: rank(radios: radios, playlist: playlist, limit: limit), seedCount: radios.count)
+        // Ranked deep, then the ones shown before are dropped: what is left starts where the last try ended.
+        let fresh = rank(radios: radios, playlist: playlist, limit: 400).filter { !skippingSongs.contains($0.id) }
+        return SuggestionResult(suggestions: Array(fresh.prefix(limit)), seedCount: radios.count, seedIDs: seeds.map(\.id))
     }
 }

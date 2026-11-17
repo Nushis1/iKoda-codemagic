@@ -110,23 +110,30 @@ struct UserPlaylistView: View {
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
+                // In groups, like a song's menu: what to play, what to look at, then the playlist itself.
                 Menu("More", systemImage: "ellipsis") {
                     if !playlist.songs.isEmpty {
-                        Button("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") { player.playNext(playlist.songs) }
-                        Button("Add to Queue", systemImage: "text.line.last.and.arrowtriangle.forward") { player.addToQueue(playlist.songs) }
-                    }
-                    if !playlist.songs.isEmpty {
-                        Button("Suggested Songs", systemImage: "sparkles") { showingSuggestions = true }
-                    }
-                    if playlist.songs.count > 1 {
-                        Button(duplicatesOnly ? "Show All Songs" : "Find Duplicates",
-                               systemImage: duplicatesOnly ? "music.note.list" : "square.on.square") {
-                            query = ""
-                            withAnimation { duplicatesOnly.toggle() }
+                        Section {
+                            Button("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") { player.playNext(playlist.songs) }
+                            Button("Add to Queue", systemImage: "text.line.last.and.arrowtriangle.forward") { player.addToQueue(playlist.songs) }
+                        }
+                        Section {
+                            Button("Suggested Songs", systemImage: "sparkles") { showingSuggestions = true }
+                            if playlist.songs.count > 1 {
+                                Button(duplicatesOnly ? "Show All Songs" : "Find Duplicates",
+                                       systemImage: duplicatesOnly ? "music.note.list" : "square.on.square") {
+                                    query = ""
+                                    withAnimation { duplicatesOnly.toggle() }
+                                }
+                            }
                         }
                     }
-                    PinMenuItem(pin: .userPlaylist(playlist.id))
-                    Button("Delete Playlist", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                    Section {
+                        PinMenuItem(pin: .userPlaylist(playlist.id))
+                    }
+                    Section {
+                        Button("Delete Playlist", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                    }
                 }
             }
         }

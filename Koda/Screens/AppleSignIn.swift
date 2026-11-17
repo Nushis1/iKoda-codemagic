@@ -52,7 +52,7 @@ final class AppleSignIn {
                 state = .signedIn(email)
             } catch {
                 account = nil
-                state = cancelled ? .signedOut : .failed(error.localizedDescription)
+                state = cancelled ? .signedOut : .failed(Self.plain(error.localizedDescription))
             }
         }
     }
@@ -79,6 +79,33 @@ final class AppleSignIn {
         pending = nil
     }
 
+    /// What the library says is long and full of file names. The few things the person can act on are
+    /// put plainly (a wrong password above all); anything else is cut down to its first line.
+    static func plain(_ raw: String) -> String {
+        let text = raw.lowercased()
+        let wrong = ["incorrect", "-20101", "-22406", "invalid apple id", "invalid credentials", "wrong password"]
+        if wrong.contains(where: { text.contains($0) }) {
+            return "Incorrect Apple ID or password."
+        }
+        if text.contains("locked") || text.contains("-20209") {
+            return "This Apple ID is locked. Unlock it at iforgot.apple.com, then try again."
+        }
+        if text.contains("too many") || text.contains("429") {
+            return "Apple says there were too many attempts. Wait a while and try again."
+        }
+        if text.contains("anisette") {
+            return "Koda couldn't reach the server that vouches for this device with Apple. Try again in a while."
+        }
+        if ["timed out", "offline", "network", "internet", "connection"].contains(where: { text.contains($0) }) {
+            return "Koda couldn't reach Apple. Check the connection and try again."
+        }
+        // Whatever else: the first message, without the "F /path/file.rs:12" the library appends.
+        let withoutPaths = raw.replacingOccurrences(of: #"\s*F?\s*/\S+\.rs(:\d+)*"#, with: "", options: .regularExpression)
+        let first = withoutPaths.split(separator: "•").first.map(String.init) ?? withoutPaths
+        let trimmed = first.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "The sign-in failed." : String(trimmed.prefix(160))
+    }
+
     /// Something the form can't send, such as an empty field.
     func report(_ message: String) {
         guard !isBusy else { return }
@@ -95,7 +122,7 @@ final class AppleSignIn {
                 developer = try await account.developerInfo()
             } catch {
                 developer = nil
-                developerError = error.localizedDescription
+                developerError = Self.plain(error.localizedDescription)
             }
             isReading = false
         }

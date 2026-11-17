@@ -269,14 +269,14 @@ struct RenewalSettingsView: View {
                         signIn.answer(.code(code))
                         code = ""
                     }
-                    Button("Change Method", role: .cancel) {
-                        signIn.answer(.changeMethod)
+                    Button("Cancel", role: .cancel) {
+                        signIn.answer(nil)
                         code = ""
                     }
                 } message: {
                     Text(signIn.request?.sms == true
-                         ? "Apple sent the code by text. Type the newest one."
-                         : "Apple sent the code to your trusted devices. Type the newest one.")
+                         ? "Apple sent a code to your phone by text. Type it here."
+                         : "Apple sent a code to your trusted devices or phone number. Type it here.")
                 }
             Text(signIn.isAskingForMethod ? "Waiting for your choice…"
                  : signIn.isAskingForCode ? "Waiting for the code…" : "Talking to Apple…")
@@ -299,7 +299,7 @@ struct RenewalSettingsView: View {
             Button("Trusted Devices") { signIn.answer(.devices) }
             Button("Cancel", role: .cancel) { signIn.answer(nil) }
         } message: {
-            Text("The code is sent once you choose. Apple may already have sent one when the password was accepted; use the newest.")
+            Text("Apple needs to know where to send the code. Use the newest one that arrives.")
         }
     }
 

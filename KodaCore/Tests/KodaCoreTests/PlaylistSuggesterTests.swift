@@ -52,4 +52,21 @@ import Testing
         #expect(Set(seeds.map(\.id)).isSubset(of: Set(songs.map(\.id))))
         #expect(PlaylistSuggester.pickSeeds(from: Array(songs.prefix(2)), count: 5, using: &generator).count == 2)
     }
+
+    @Test func aRefreshAsksAboutOtherSongsOfThePlaylist() {
+        let songs = (1...10).map { song("s\($0)") }
+        let used: Set<String> = ["s1", "s2", "s3", "s4", "s5"]
+        let pool = PlaylistSuggester.seedPool(songs, skipping: used, count: 5)
+        #expect(pool.count == 5)
+        #expect(pool.allSatisfy { !used.contains($0.id) })
+    }
+
+    @Test func whenTooFewAreLeftEverySongIsAskedAboutAgain() {
+        let songs = (1...6).map { song("s\($0)") }
+        let used: Set<String> = ["s1", "s2", "s3", "s4", "s5"]
+        #expect(PlaylistSuggester.seedPool(songs, skipping: used, count: 5).count == 6)
+        // A short playlist is always asked about whole.
+        let few = (1...2).map { song("f\($0)") }
+        #expect(PlaylistSuggester.seedPool(few, skipping: ["f1"], count: 5).count == 2)
+    }
 }

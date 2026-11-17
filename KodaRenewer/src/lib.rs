@@ -8,8 +8,7 @@
 use std::ffi::{c_char, c_void, CStr};
 use std::path::PathBuf;
 use std::panic::{self, AssertUnwindSafe};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, Once, OnceLock};
+use std::sync::{Mutex, Once, OnceLock};
 
 use isideload::anisette::remote_v3::RemoteV3AnisetteProvider;
 use isideload::auth::apple_account::{AppleAccount, TwoFactorCallbackParams, TwoFactorCallbackResponse};
@@ -204,9 +203,9 @@ pub unsafe extern "C" fn koda_renewer_login(
     let context = Context { callback, user };
     // isideload asks the callback more than once: first HOW the code is to reach the person (the
     // trusted devices, or an SMS to one of the trusted numbers), and only then for the code itself
-    // ("Cannot submit code without knowing which method to use"). The first question is always the
-    // method, so the person chooses before anything is sent; Swift asks them each time.
-    let calls = Arc::new(AtomicUsize::new(0));
+    // ("Cannot submit code without knowing which method to use"). Apple sends a code by itself as soon as
+    // the password is accepted, so the method is asked about only when Apple says it doesn't know it
+    // (`params.unknown`); otherwise the first question is already the code.
     // A panic anywhere in the sign-in would take the whole app down; it is caught and reported instead.
     let outcome = panic::catch_unwind(AssertUnwindSafe(|| {
         runtime().block_on(async move {
@@ -216,8 +215,7 @@ pub unsafe extern "C" fn koda_renewer_login(
             AppleAccount::builder(&email)
                 .anisette_provider(provider)
                 .login(&password, move |params| {
-                    let first = calls.fetch_add(1, Ordering::SeqCst) == 0;
-                    let request = describe(&params, first);
+                    let request = describe(&params, false);
                     let method_request = describe(&params, true);
                     async move {
                         let mut request = request;
