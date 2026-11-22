@@ -169,7 +169,7 @@ final class AutomaticBackup {
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
-        return try? encoder.encode(AllProfiles(roster: rosterData, libraries: libraries))
+        return try? encoder.encode(KeychainBackup.AllProfiles(roster: rosterData, libraries: libraries))
     }
 
     var latest: KeychainBackup.Info? { KeychainBackup.info() }
@@ -207,7 +207,7 @@ final class AutomaticBackup {
     /// profile if it changed (`AppModel.activeProfileChanged`).
     func restore(discardingOthers: Bool = false) throws {
         guard let backup = KeychainBackup.read() else { throw RestoreError.unreadable }
-        if let all = try? JSONDecoder().decode(AllProfiles.self, from: backup), all.format == AllProfiles.format {
+        if let all = try? JSONDecoder().decode(KeychainBackup.AllProfiles.self, from: backup), all.format == KeychainBackup.AllProfiles.format {
             let before = roster.profiles.map(\.id)
             guard roster.restore(from: all.roster, keepingOthers: !discardingOthers) else { throw RestoreError.unreadable }
             library.open(directory: roster.folder(for: roster.activeID))
