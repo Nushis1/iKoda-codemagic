@@ -88,3 +88,30 @@ import Testing
         #expect(profile.avatar == KodaAvatar.seeded(id.uuidString))
     }
 }
+
+@MainActor
+@Suite struct ProfileRosterBackupTests {
+    private func temp() throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appending(path: "koda-roster-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    @Test func aRosterComesBackWithItsActiveProfileAndNoPhotoFallsBackToTheFace() throws {
+        let roster = ProfileRoster(root: try temp())
+        let second = roster.addDeviceProfile(named: "Guest")
+        roster.update(second.id) { $0.picture = .photo }
+        roster.setActive(second.id)
+        let data = try #require(roster.backupData())
+        #expect(roster.backupData() == data)
+
+        let fresh = ProfileRoster(root: try temp())
+        let strayID = fresh.activeID
+        #expect(fresh.restore(from: data, keepingOthers: false))
+        #expect(fresh.profiles.map(\.id) == roster.profiles.map(\.id))
+        #expect(fresh.activeID == second.id)
+        #expect(fresh.profile(second.id)?.picture == .drawn)
+        #expect(fresh.profile(strayID) == nil)
+        #expect(!fresh.restore(from: Data("nope".utf8)))
+    }
+}

@@ -38,51 +38,54 @@ struct PlaylistLockMenuItem: View {
     }
 }
 
-/// What a locked playlist shows until it is unlocked: its cover blurred behind a lock, and the
-/// Face ID prompt at once (the button asks again after a cancel).
+/// What a locked playlist shows until it is unlocked: black, with its cover only as a faint glow,
+/// and a lock to tap. Nothing asks until it is tapped, so locking a playlist from its own menu
+/// doesn't scan twice in a row.
 struct LockedPlaylistView: View {
     let playlist: UserPlaylist
     @Environment(AppModel.self) private var app
 
+    /// What the device unlocks with, for the line under the title.
+    private var method: String {
+        let context = LAContext()
+        _ = context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
+        return switch context.biometryType {
+        case .faceID: "Face ID"
+        case .touchID: "Touch ID"
+        case .opticID: "Optic ID"
+        default: "your passcode"
+        }
+    }
+
     var body: some View {
-        VStack(spacing: 28) {
-            PlaylistCover(playlist: playlist, size: 220, cornerRadius: 24)
-                .blur(radius: 28)
-                .overlay {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 40, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .frame(width: 96, height: 96)
-                        .glassEffect(.regular, in: .circle)
-                }
-            VStack(spacing: 6) {
-                Text(playlist.name)
-                    .font(.title2.bold())
-                    .multilineTextAlignment(.center)
-                Text("Locked")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+        Button {
+            Task { _ = await app.unlock(playlist.id) }
+        } label: {
+            VStack(spacing: 14) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 46))
+                Text("Tap to unlock")
+                    .font(.title3.bold())
+                Text("Using \(method)")
+                    .foregroundStyle(.white.opacity(0.6))
             }
-            Button {
-                Task { _ = await app.unlock(playlist.id) }
-            } label: {
-                Label("Unlock with Face ID", systemImage: "faceid")
-                    .font(.headline)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
-            }
-            .buttonStyle(.glassProminent)
+            .foregroundStyle(.white.opacity(0.85))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
         }
-        .padding(32)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .buttonStyle(.plain)
         .background {
-            // The same cover, large and soft, so the page takes the playlist's colours.
-            PlaylistCover(playlist: playlist, size: 400, cornerRadius: 0)
-                .blur(radius: 90)
-                .opacity(0.45)
-                .ignoresSafeArea()
+            ZStack {
+                Color.black
+                PlaylistCover(playlist: playlist, size: 400, cornerRadius: 0)
+                    .blur(radius: 90)
+                    .opacity(0.3)
+            }
+            .ignoresSafeArea()
         }
+        .toolbarColorScheme(.dark, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
-        .task { _ = await app.unlock(playlist.id) }
+        .accessibilityLabel("\(playlist.name) is locked")
+        .accessibilityHint("Unlocks with \(method)")
     }
 }

@@ -585,6 +585,7 @@ struct BackupSettingsView: View {
                 if app.settings.keepsAutomaticBackup, let automatic {
                     LabeledContent("Last saved", value: automatic.date.formatted(date: .abbreviated, time: .shortened))
                     LabeledContent("Profile", value: automatic.profile)
+                    if let profiles = automatic.profiles { LabeledContent("Profiles", value: profiles.formatted()) }
                     LabeledContent("Liked songs", value: automatic.liked.formatted())
                     LabeledContent("Plays", value: automatic.plays.formatted())
                     LabeledContent("Size", value: ByteCountFormatter.string(fromByteCount: Int64(automatic.bytes), countStyle: .file))
@@ -594,24 +595,24 @@ struct BackupSettingsView: View {
                         Label("Restore from This Copy", systemImage: "arrow.counterclockwise")
                     }
                     // On the button, not the form: the form already has a dialog of its own.
-                    .confirmationDialog("Replace your library with the automatic copy?", isPresented: $pendingAutomaticRestore,
+                    .confirmationDialog("Restore the automatic copy?", isPresented: $pendingAutomaticRestore,
                                         titleVisibility: .visible) {
-                        Button("Replace Library", role: .destructive) {
+                        Button("Restore", role: .destructive) {
                             do {
-                                try app.automaticBackup.restore()
-                                outcome = "Your library is restored."
+                                try app.restoreAutomaticBackup()
+                                outcome = "Your profiles are restored."
                             } catch {
                                 outcome = error.localizedDescription
                             }
                         }
                     } message: {
-                        Text("What is in your library now is replaced.")
+                        Text("Every profile in the copy comes back with its library and replaces its current version; profiles that are not in the copy stay.")
                     }
                 }
             } header: {
                 Text("Automatic Backup")
             } footer: {
-                Text("Each time you leave Koda, your library is saved to the iPhone's Keychain, which stays when an app is deleted. After you install Koda again, your liked songs, history, stats and artists come back by themselves. It works only when Koda is installed again with the same Apple ID, it stays on this iPhone (not in iCloud) and it covers the profile in use. Turning it off deletes the copy.")
+                Text("Each time you leave Koda, your library is saved to the iPhone's Keychain, which stays when an app is deleted. After you install Koda again, every profile comes back by itself: its liked songs, history, stats, playlists (and their Face ID locks), search history and blocked phrases. Accounts signed in to YouTube Music reconnect too. It works only when Koda is installed again with the same Apple ID, and it stays on this iPhone (not in iCloud). Profile photos are not kept. Turning it off deletes the copy.")
             }
             Section {
                 Button {

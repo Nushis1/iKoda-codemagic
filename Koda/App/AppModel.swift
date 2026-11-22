@@ -149,7 +149,7 @@ final class AppModel {
         }
         player.isUnwanted = { [library] song in library.isHidden(song) }
         nowPlayingLike = NowPlayingLike(player: player, library: library, settings: settings)
-        automaticBackup = AutomaticBackup(library: library, settings: settings) { [roster] in roster.active.name }
+        automaticBackup = AutomaticBackup(library: library, roster: roster, settings: settings)
         let lastFM = LastFM(directory: directory)
         self.lastFM = lastFM
         player.onItemStarted = { [lastFM, player] item in
@@ -188,7 +188,11 @@ final class AppModel {
         connectAccounts()
         if settings.mode == .video { selectedTab = .videos }
         // A reinstall finds the copy the last install left in the Keychain and takes it back.
-        if !Platform.isMac { automaticBackup.restoreOnNewInstall() }
+        if !Platform.isMac {
+            let before = roster.active
+            automaticBackup.restoreOnNewInstall()
+            activeProfileChanged(from: before)
+        }
         // Someone upgrading already has a library; the welcome is for a new install.
         if !settings.hasSeenOnboarding {
             if library.liked.isEmpty, library.recent.isEmpty, roster.profiles.count == 1, !roster.active.isSignedIn {
@@ -211,6 +215,21 @@ final class AppModel {
         home = HomeModel(profile: id)
         roster.setActive(id)
         moveSession(from: leaving, to: profile)
+    }
+
+    /// The automatic copy's profiles and libraries replace what is here (Settings → Back Up and Restore).
+    func restoreAutomaticBackup() throws {
+        let before = roster.active
+        try automaticBackup.restore()
+        activeProfileChanged(from: before)
+    }
+
+    /// A restore may have made another profile the active one; the app follows, as a switch does.
+    private func activeProfileChanged(from leaving: KodaProfile) {
+        guard roster.activeID != leaving.id else { return }
+        forgetVideoState()
+        home = HomeModel(profile: roster.activeID)
+        moveSession(from: leaving, to: roster.active)
     }
 
     /// Delete a profile and what it keeps on this device; another takes over if it was active.

@@ -142,6 +142,34 @@ public final class ProfileRoster {
 
     public func photoFile(for id: UUID) -> URL { folder(for: id).appending(path: "photo.jpg") }
 
+    // MARK: Backup
+
+    /// The roster as JSON, the same bytes for the same roster so an unchanged one isn't saved again.
+    public func backupData() -> Data? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        return try? encoder.encode(Saved(profiles: profiles, activeID: activeID))
+    }
+
+    /// Take the profiles and the active one from `backupData()`; false, with nothing changed, when it isn't one.
+    /// Profiles here that the backup lacks stay after the restored ones unless `keepingOthers` is off.
+    /// Photos aren't in a backup, so a picture whose photo is missing falls back to the drawn face.
+    @discardableResult
+    public func restore(from data: Data, keepingOthers: Bool = true) -> Bool {
+        guard let saved = try? JSONDecoder().decode(Saved.self, from: data), !saved.profiles.isEmpty else { return false }
+        let restored = saved.profiles.map { profile in
+            var profile = profile
+            if profile.picture == .photo, !FileManager.default.fileExists(atPath: photoFile(for: profile.id).path) { profile.picture = .drawn }
+            return profile
+        }
+        let ids = Set(restored.map(\.id))
+        profiles = restored + (keepingOthers ? profiles.filter { !ids.contains($0.id) } : [])
+        activeID = saved.activeID.flatMap { ids.contains($0) ? $0 : nil } ?? restored[0].id
+        previousID = nil
+        save()
+        return true
+    }
+
     // MARK: Changing the roster
 
     @discardableResult
