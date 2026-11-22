@@ -1,0 +1,37 @@
+import KodaCore
+import SwiftUI
+
+/// What the Mac shows beside the page: the playing song's lyrics or what plays next.
+enum MacSidePanel: Hashable {
+    case lyrics, queue
+}
+
+/// Lyrics or Up Next beside the page, as Music shows them on the Mac: one at a time, switched
+/// at the top or from the player bar's buttons (the same button again closes it), while the page
+/// stays as it was. In the window's own appearance, as Music's panels are; Now Playing
+/// draws the same two panels on the song's colours.
+struct MacSidePanelView: View {
+    @Environment(AppModel.self) private var app
+    @Environment(Player.self) private var player
+
+    var body: some View {
+        // Under the window's toolbar, in the panel's own space: drawn up in the titlebar band,
+        // the switch couldn't be clicked (the band belongs to the window, for dragging it) and
+        // the sidebar button went missing after the sidebar was hidden with the panel open.
+        VStack(spacing: 8) {
+            Picker("Show", selection: Binding(get: { app.sidePanel ?? .lyrics }, set: { app.sidePanel = $0 })) {
+                Text("Lyrics").tag(MacSidePanel.lyrics)
+                Text("Up Next").tag(MacSidePanel.queue)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            Group {
+                if app.sidePanel == .queue { QueuePanel() } else { LyricsPanel() }
+            }
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}

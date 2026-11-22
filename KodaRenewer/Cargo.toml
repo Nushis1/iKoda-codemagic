@@ -1,0 +1,40 @@
+# Stage 1 of Koda's own renewal tool: does the Rust sideloading stack build for iOS here at all?
+# Nothing in the app uses this yet. The pins follow SideInstaller's NOTES.md, which builds the
+# same stack for iOS (github.com/FrizzleM/SideInstaller).
+[package]
+name = "koda-renewer"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "koda_renewer"
+crate-type = ["staticlib"]
+
+[dependencies]
+# Talks to the device: pairing, tunnel, install, file transfer.
+idevice = { git = "https://github.com/jkcoxson/idevice", rev = "7bd551c16c6dd2e058740d85a2d9399a51a776e9", default-features = false, features = [
+    "remote_pairing", "tunnel_tcp_stack", "rsd", "tcp", "xpc", "core_device_proxy",
+    "installation_proxy", "installcoordination_proxy", "afc", "house_arrest", "misagent",
+    "heartbeat", "mobile_image_mounter", "pair", "usbmuxd", "aws-lc",
+] }
+# Apple ID sign-in, certificate and profile, signing. No keyring: iOS has none for it.
+# "tokio-mt" is a default feature that brings in the WebSocket library the anisette code uses; with
+# the defaults off it has to be asked for (the first build failed without it). Pinned to the commit
+# that got furthest (isideload 0.5.2) so a build today is the build tomorrow.
+isideload = { git = "https://github.com/nab138/isideload", rev = "326e5622", default-features = false, features = ["install", "fs-storage", "tokio-mt"] }
+
+# Named directly: the runtime that runs isideload's async calls, and its error type.
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+rootcause = "0.12"
+serde_json = "1"
+# reqwest (inside isideload) builds on rustls without choosing a crypto provider; one has to be
+# installed before its first connection, or it panics. aws-lc-rs is already in the build for idevice.
+rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "std"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+# panic stays "unwind" (the default): a panic is caught in lib.rs and shown on screen, not a crash.
+strip = true

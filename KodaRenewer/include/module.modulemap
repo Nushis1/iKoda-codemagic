@@ -1,0 +1,4 @@
+module KodaRenewer {
+    header "koda_renewer.h"
+    export *
+}
