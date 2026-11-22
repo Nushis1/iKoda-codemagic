@@ -20,6 +20,7 @@ use isideload::dev::devices::DevicesApi;
 use isideload::dev::teams::TeamsApi;
 use isideload::sideload::SideloaderBuilder;
 use rootcause::option_ext::OptionExt;
+use isideload::util::callbacks::{ExtensionsBehaviorCallbackBox, MaxCertsCallbackBox};
 use isideload::util::fs_storage::FsStorage;
 use rootcause::prelude::Report;
 use tokio::runtime::{Builder, Runtime};
@@ -362,7 +363,8 @@ async fn sign_own_app(
     let team = session.list_teams().await?.into_iter().next().ok_or_report()?;
     // Without the phone on the team there is no device to put in the profile (error 8220).
     session.ensure_device_registered(&team, &device_name, &udid, DeveloperDeviceType::Ios).await?;
-    let mut sideloader = SideloaderBuilder::new(session, email)
+    // Nothing here picks a certificate or extension callback, so the two type parameters are named (the boxed ones isideload provides for that).
+    let mut sideloader = SideloaderBuilder::<MaxCertsCallbackBox, ExtensionsBehaviorCallbackBox>::new(session, email)
         .storage(Box::new(FsStorage::new(storage_dir)))
         .machine_name("Koda".to_string())
         .build();
