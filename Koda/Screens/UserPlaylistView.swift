@@ -26,7 +26,9 @@ struct UserPlaylistView: View {
 
     var body: some View {
         if let playlist = library.userPlaylist(id) {
-            if Platform.isMac { macContent(playlist) } else { content(playlist) }
+            if playlist.isLocked && !app.unlockedPlaylists.contains(id) {
+                LockedPlaylistView(playlist: playlist)
+            } else if Platform.isMac { macContent(playlist) } else { content(playlist) }
         } else {
             ContentUnavailableView("Playlist Deleted", systemImage: "music.note.list")
         }
@@ -130,6 +132,7 @@ struct UserPlaylistView: View {
                     }
                     Section {
                         PinMenuItem(pin: .userPlaylist(playlist.id))
+                        PlaylistLockMenuItem(playlist: playlist)
                     }
                     Section {
                         Button("Delete Playlist", systemImage: "trash", role: .destructive) { confirmDelete = true }
@@ -255,6 +258,7 @@ struct UserPlaylistView: View {
                         Divider()
                     }
                     PinMenuItem(pin: .userPlaylist(playlist.id))
+                    PlaylistLockMenuItem(playlist: playlist)
                     Button("Edit Details…", systemImage: "pencil") { editingDetails = true }
                     Button("Delete Playlist…", systemImage: "trash", role: .destructive) { confirmDelete = true }
                 }

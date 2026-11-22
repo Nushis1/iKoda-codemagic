@@ -52,6 +52,8 @@ final class AppModel {
     var playlistTarget: PlaylistTarget?
     /// A shared link that could not be opened, shown as an alert.
     var linkError: String?
+    /// Locked playlists opened since Koda was last in the background (see PlaylistLock.swift).
+    var unlockedPlaylists: Set<UUID> = []
     /// The sheet that adds a profile, asked for from a toolbar menu, the profile page or the Mac's sidebar.
     var isAddingProfile = false
     /// The pane the Mac's Settings window should show when it next opens or is already open.

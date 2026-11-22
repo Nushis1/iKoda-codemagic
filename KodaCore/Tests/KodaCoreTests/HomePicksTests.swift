@@ -70,3 +70,17 @@ import Testing
         #expect(!hidden.isEmpty)
     }
 }
+
+@Suite struct PlaylistLockTests {
+    @Test func aPlaylistFromBeforeLockingIsUnlockedAndLockedOnesSurviveEncoding() throws {
+        var playlist = UserPlaylist(name: "P")
+        #expect(!playlist.isLocked)
+        playlist.isLocked = true
+        let data = try JSONEncoder().encode(playlist)
+        #expect(try JSONDecoder().decode(UserPlaylist.self, from: data).isLocked)
+        var json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json["isLocked"] = nil
+        let old = try JSONSerialization.data(withJSONObject: json)
+        #expect(try !JSONDecoder().decode(UserPlaylist.self, from: old).isLocked)
+    }
+}

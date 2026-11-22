@@ -123,14 +123,17 @@ struct LibraryView: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 PlaylistCover(playlist: playlist, size: 140, cornerRadius: 10)
                                 Text(playlist.name).font(.subheadline.weight(.medium)).lineLimit(1)
-                                Text(playlist.songs.count == 1 ? "1 song" : "\(playlist.songs.count) songs")
+                                Text(playlist.isLocked ? "Locked" : playlist.songs.count == 1 ? "1 song" : "\(playlist.songs.count) songs")
                                     .font(.footnote).foregroundStyle(.secondary)
                             }
                             .frame(width: 140, alignment: .leading)
                             .contentShape(.rect)
                         }
                         .buttonStyle(.plain)
-                        .contextMenu { PinMenuItem(pin: .userPlaylist(playlist.id)) }
+                        .contextMenu {
+                            PinMenuItem(pin: .userPlaylist(playlist.id))
+                            PlaylistLockMenuItem(playlist: playlist)
+                        }
                     }
                 }
             }

@@ -361,7 +361,7 @@ async fn sign_own_app(
     let mut session = DeveloperSession::from_account(account).await?;
     let team = session.list_teams().await?.into_iter().next().ok_or_report()?;
     // Without the phone on the team there is no device to put in the profile (error 8220).
-    session.ensure_device_registered(&team, &device_name, &udid).await?;
+    session.ensure_device_registered(&team, &device_name, &udid, DeveloperDeviceType::Ios).await?;
     let mut sideloader = SideloaderBuilder::new(session, email)
         .storage(Box::new(FsStorage::new(storage_dir)))
         .machine_name("Koda".to_string())

@@ -387,7 +387,7 @@ struct SchemaPlayAudioIntent: AudioPlaybackIntent {
         case .artist(let artist):
             return try await app.music.artist(artist.id).topSongs
         case .playlist(let playlist):
-            if let uuid = UUID(uuidString: playlist.id), let mine = app.library.userPlaylist(uuid) { return mine.songs }
+            if let uuid = UUID(uuidString: playlist.id), let mine = app.library.userPlaylist(uuid) { return mine.isLocked ? [] : mine.songs }
             return try await app.music.playlist(playlist.id).songs
         }
     }

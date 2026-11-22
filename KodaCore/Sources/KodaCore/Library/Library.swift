@@ -441,6 +441,13 @@ public final class Library {
         }
     }
 
+    /// Not an edit of the playlist's contents, so it keeps its place in Recent.
+    public func setLocked(_ id: UUID, _ locked: Bool) {
+        guard let index = userPlaylists.firstIndex(where: { $0.id == id }) else { return }
+        userPlaylists[index].isLocked = locked
+        save()
+    }
+
     private func editPlaylist(_ id: UUID, _ change: (inout UserPlaylist) -> Void) {
         guard let index = userPlaylists.firstIndex(where: { $0.id == id }) else { return }
         change(&userPlaylists[index])
@@ -913,6 +920,8 @@ public struct UserPlaylist: Identifiable, Hashable, Codable, Sendable {
     public var hasCover = false
     /// Bumped whenever the photo changes, so a cached image is never shown as the new one.
     public var coverVersion = 0
+    /// Opening or playing it asks for Face ID (or the passcode) first; its songs stay out of Library search.
+    public var isLocked = false
 
     public init(id: UUID = UUID(), name: String, songs: [Song] = [], created: Date = Date()) {
         self.id = id
@@ -932,6 +941,7 @@ public struct UserPlaylist: Identifiable, Hashable, Codable, Sendable {
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
         hasCover = try container.decodeIfPresent(Bool.self, forKey: .hasCover) ?? false
         coverVersion = try container.decodeIfPresent(Int.self, forKey: .coverVersion) ?? 0
+        isLocked = try container.decodeIfPresent(Bool.self, forKey: .isLocked) ?? false
     }
 
     public var duration: TimeInterval { songs.compactMap(\.duration).reduce(0, +) }

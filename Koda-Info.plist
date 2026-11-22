@@ -13,6 +13,8 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Koda asks for Face ID to open playlists you locked.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Koda listens only while you search by voice.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

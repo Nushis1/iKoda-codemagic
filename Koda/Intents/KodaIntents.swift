@@ -111,7 +111,7 @@ enum IntentSongs {
     /// Liked, then recently played, then the listener's playlists; each song once.
     static func library(_ app: AppModel) -> [Song] {
         var seen = Set<String>()
-        let all = app.library.liked + app.library.recent + app.library.userPlaylists.flatMap(\.songs)
+        let all = app.library.liked + app.library.recent + app.library.userPlaylists.filter { !$0.isLocked }.flatMap(\.songs)
         return all.filter { seen.insert($0.id).inserted }
     }
 
@@ -175,6 +175,7 @@ struct PlayPlaylistIntent: AudioPlaybackIntent {
         guard let saved = app.library.userPlaylist(playlist.id), !saved.songs.isEmpty else {
             return .result(dialog: "That playlist is empty.")
         }
+        guard !saved.isLocked else { return .result(dialog: "That playlist is locked. Open it in Koda to unlock it.") }
         app.player.play(saved.songs, startAt: shuffle ? Int.random(in: 0..<saved.songs.count) : 0, shuffled: shuffle)
         return .result(dialog: "Playing \(saved.name).")
     }
