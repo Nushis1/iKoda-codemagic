@@ -80,6 +80,9 @@ struct SearchView: View {
     @State private var listening = false
     /// Music playing when voice search began, to pick up again after it.
     @State private var resumeAfterVoice = false
+    @State private var recognizing = false
+    /// Music playing when Music Recognition began; not resumed if a song is played from its result.
+    @State private var resumeAfterRecognition = false
 
     var body: some View {
         @Bindable var model = model
@@ -105,13 +108,28 @@ struct SearchView: View {
             if text.isEmpty { model.clear() }
         }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button("Recognize Song", systemImage: "waveform") {
+                    resumeAfterRecognition = player.wantsToPlay
+                    if resumeAfterRecognition { player.pause(from: "music recognition") }
+                    recognizing = true
+                }
                 Button("Search by Voice", systemImage: "mic") {
                     resumeAfterVoice = player.wantsToPlay
                     if resumeAfterVoice { player.pause(from: "voice search") }
                     listening = true
                 }
             }
+        }
+        .sheet(isPresented: $recognizing, onDismiss: {
+            if resumeAfterRecognition { player.resume() }
+            resumeAfterRecognition = false
+        }) {
+            SongRecognitionSheet(onPlay: { resumeAfterRecognition = false }) { text in
+                model.query = text
+                submit(text)
+            }
+            .appEnvironment(app)
         }
         .sheet(isPresented: $listening, onDismiss: {
             if resumeAfterVoice { player.resume() }

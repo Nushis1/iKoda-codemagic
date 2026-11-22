@@ -16,7 +16,7 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>Koda asks for Face ID to open playlists you locked.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Koda listens only while you search by voice.</string>
+	<string>Koda listens only while you search by voice or recognize a song.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Koda turns what you say into a search. On iPhones that support it, this happens on the device.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
