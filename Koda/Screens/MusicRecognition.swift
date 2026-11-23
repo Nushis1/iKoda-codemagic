@@ -15,22 +15,24 @@ nonisolated private enum RecognitionError: Error {
     case failed
 }
 
-/// The microphone's audio on its way to a file. Used by the audio thread until the tap is removed, then closed.
+/// The microphone's audio on its way to memory, as mono 16 kHz. Used by the audio thread until the tap is removed.
 nonisolated private final class Recording: @unchecked Sendable {
-    var file: AVAudioFile?
+    private let lock = NSLock()
+    private var collected: [Float] = []
     private let converter: AVAudioConverter
     private let format: AVAudioFormat
 
-    init(to url: URL, from input: AVAudioFormat) throws {
-        // Mono, 44.1 kHz, 16 bit: a clear recording that is about 1 MB for twelve seconds.
-        let file = try AVAudioFile(forWriting: url, settings: [
-            AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 44_100, AVNumberOfChannelsKey: 1,
-            AVLinearPCMBitDepthKey: 16, AVLinearPCMIsFloatKey: false, AVLinearPCMIsBigEndianKey: false,
-        ])
-        guard let converter = AVAudioConverter(from: input, to: file.processingFormat) else { throw RecognitionError.failed }
-        self.file = file
+    init(from input: AVAudioFormat) throws {
+        guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: Double(SoundSignature.sampleRate), channels: 1, interleaved: false),
+              let converter = AVAudioConverter(from: input, to: format) else { throw RecognitionError.failed }
+        self.format = format
         self.converter = converter
-        format = file.processingFormat
+    }
+
+    var samples: [Float] {
+        lock.lock()
+        defer { lock.unlock() }
+        return collected
     }
 
     func append(_ buffer: AVAudioPCMBuffer) {
@@ -47,18 +49,20 @@ nonisolated private final class Recording: @unchecked Sendable {
             status.pointee = .haveData
             return buffer
         }
-        if failure == nil, converted.frameLength > 0 { try? file?.write(from: converted) }
+        guard failure == nil, converted.frameLength > 0, let channel = converted.floatChannelData?[0] else { return }
+        let chunk = Array(UnsafeBufferPointer(start: channel, count: Int(converted.frameLength)))
+        lock.lock()
+        collected += chunk
+        lock.unlock()
     }
 }
 
-/// Listens through the microphone for `seconds` and returns the recording as a WAV file.
-/// Run here, off the main actor, so no audio type crosses it.
-nonisolated private func record(seconds: Int) async throws -> URL {
-    let url = FileManager.default.temporaryDirectory.appending(path: "koda-recognition-\(UUID().uuidString).wav")
+/// Listens through the microphone for `seconds`; the audio as mono 16 kHz, samples from -1 to 1.
+nonisolated private func record(seconds: Int) async throws -> [Float] {
     let engine = AVAudioEngine()
     let input = engine.inputNode
     let format = input.outputFormat(forBus: 0)
-    let recording = try Recording(to: url, from: format)
+    let recording = try Recording(from: format)
     input.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, _ in
         recording.append(buffer)
     }
@@ -67,7 +71,6 @@ nonisolated private func record(seconds: Int) async throws -> URL {
     defer {
         if engine.isRunning { engine.stop() }
         input.removeTap(onBus: 0)
-        recording.file = nil
         try? session.setCategory(.playback, mode: .default, policy: .longFormAudio)
         try? session.setActive(false, options: .notifyOthersOnDeactivation)
     }
@@ -76,12 +79,62 @@ nonisolated private func record(seconds: Int) async throws -> URL {
     engine.prepare()
     try engine.start()
     try await Task.sleep(for: .seconds(seconds))
-    return url
+    return recording.samples
 }
 
-/// Asks AudD (api.audd.io, a music recognition service with an official API) what the recording is;
-/// nil when it knows no such song.
-nonisolated private func identify(_ recording: URL, token: String) async throws -> HeardSong? {
+/// Asks Shazam's recognition service what the fingerprint is; nil when it knows no such song.
+/// Only the fingerprint is sent, never the recording.
+nonisolated private func askShazam(_ signature: SoundSignature) async throws -> HeardSong? {
+    let agents = [
+        "Dalvik/2.1.0 (Linux; U; Android 6.0.1; SM-G920F Build/MMB29K)",
+        "Dalvik/2.1.0 (Linux; U; Android 5.1.1; SM-J500FN Build/LMY48B)",
+        "Dalvik/2.1.0 (Linux; U; Android 5.0; SM-G900F Build/LRX21T)",
+        "Dalvik/1.6.0 (Linux; U; Android 4.4.4; SM-G360H Build/KTU84P)",
+    ]
+    let url = "https://amp.shazam.com/discovery/v5/en/US/android/-/tag/\(UUID().uuidString)/\(UUID().uuidString.lowercased())"
+        + "?sync=true&webv3=true&sampling=true&connected=&shazamapiversion=v3&sharehub=true&video=v3"
+    var request = URLRequest(url: URL(string: url)!, timeoutInterval: 20)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue("en_US", forHTTPHeaderField: "Content-Language")
+    request.setValue(agents.randomElement(), forHTTPHeaderField: "User-Agent")
+    let now = Int(Date().timeIntervalSince1970 * 1000)
+    let body: [String: Any] = [
+        "geolocation": ["altitude": 300, "latitude": 45, "longitude": 2],
+        "signature": ["samplems": signature.milliseconds, "timestamp": now, "uri": signature.uri],
+        "timestamp": now,
+        "timezone": TimeZone.current.identifier,
+    ]
+    request.httpBody = try JSONSerialization.data(withJSONObject: body)
+    let (data, response) = try await URLSession.shared.data(for: request)
+    // Anything but a plain answer (rate limited, refused) is a failure, not "no such song".
+    guard (response as? HTTPURLResponse)?.statusCode == 200,
+          let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw RecognitionError.failed }
+    guard let matches = root["matches"] as? [Any], !matches.isEmpty,
+          let track = root["track"] as? [String: Any], let title = track["title"] as? String else { return nil }
+    let images = track["images"] as? [String: Any]
+    let cover = (images?["coverarthq"] as? String) ?? (images?["coverart"] as? String)
+    return HeardSong(title: title, artist: track["subtitle"] as? String ?? "", artworkURL: cover.flatMap(URL.init(string:)))
+}
+
+/// The recording as a WAV file's bytes: mono, 16 bit.
+nonisolated private func wav(_ samples: [Float]) -> Data {
+    var data = Data()
+    func put<T: FixedWidthInteger>(_ value: T) { withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) } }
+    let rate = UInt32(SoundSignature.sampleRate)
+    data.append(contentsOf: Array("RIFF".utf8))
+    put(UInt32(36 + samples.count * 2))
+    data.append(contentsOf: Array("WAVEfmt ".utf8))
+    put(UInt32(16)); put(UInt16(1)); put(UInt16(1)); put(rate); put(rate * 2); put(UInt16(2)); put(UInt16(16))
+    data.append(contentsOf: Array("data".utf8))
+    put(UInt32(samples.count * 2))
+    for sample in samples { put(Int16(max(-32768, min(32767, (sample * 32768).rounded())))) }
+    return data
+}
+
+/// The backup: AudD (api.audd.io), a recognition service with an official API and the listener's own token.
+/// It is sent the recording; nil when it knows no such song.
+nonisolated private func askAudD(_ samples: [Float], token: String) async throws -> HeardSong? {
     let boundary = "koda-\(UUID().uuidString)"
     var body = Data()
     func field(_ name: String, _ value: String) {
@@ -90,7 +143,7 @@ nonisolated private func identify(_ recording: URL, token: String) async throws 
     field("api_token", token)
     field("return", "apple_music")
     body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"recording.wav\"\r\nContent-Type: audio/wav\r\n\r\n".utf8))
-    body.append(try Data(contentsOf: recording))
+    body.append(wav(samples))
     body.append(Data("\r\n--\(boundary)--\r\n".utf8))
 
     var request = URLRequest(url: URL(string: "https://api.audd.io/")!, timeoutInterval: 30)
@@ -121,35 +174,42 @@ final class SongRecognition {
         case notFound(HeardSong)
         case noMatch
         case blocked
-        case needsToken
+        /// The backup service refused the token, and the first one didn't answer.
         case badToken
     }
 
     private(set) var phase = Phase.listening
 
-    /// Long enough for a chorus, and about what AudD analyzes.
-    private static let seconds = 12
+    /// Long enough for a chorus; the length a fingerprint covers.
+    private static let seconds = SoundSignature.seconds
 
+    /// Names the song with a fingerprint made here; if that service doesn't answer and the listener
+    /// has given an AudD token, the recording goes to AudD instead.
     func start(music: YouTubeMusic, token: String) async {
         phase = .listening
-        guard !token.isEmpty else {
-            phase = .needsToken
-            return
-        }
         guard await AVAudioApplication.requestRecordPermission() else {
             phase = .blocked
             return
         }
-        var heard: HeardSong?
-        do {
-            let file = try await record(seconds: Self.seconds)
-            defer { try? FileManager.default.removeItem(at: file) }
-            heard = try await identify(file, token: token)
-        } catch RecognitionError.token {
-            phase = .badToken
+        guard let samples = try? await record(seconds: Self.seconds), !Task.isCancelled else {
+            if !Task.isCancelled { phase = .noMatch }
             return
+        }
+        var heard: HeardSong?
+        var answered = true
+        do {
+            let signature = await Task.detached(priority: .userInitiated) { SoundSignature(samples: samples) }.value
+            heard = try await askShazam(signature)
         } catch {
-            heard = nil
+            answered = false
+        }
+        if !answered, !token.isEmpty {
+            do {
+                heard = try await askAudD(samples, token: token)
+            } catch RecognitionError.token {
+                phase = .badToken
+                return
+            } catch {}
         }
         guard !Task.isCancelled else { return }
         guard let heard else {
@@ -195,10 +255,8 @@ struct SongRecognitionSheet: View {
                 message("Couldn't find the song", detail: "Hold your iPhone closer to the music and try again.", action: .retry)
             case .blocked:
                 message("Koda can't listen", detail: "Allow the microphone for Koda in Settings.", action: .settings)
-            case .needsToken:
-                message("Add your AudD token", detail: "Music Recognition uses AudD, which gives you 300 free recognitions. Get a token, then paste it in Settings → Music Recognition.", action: .audd)
             case .badToken:
-                message("AudD didn't accept the token", detail: "Check it in Settings → Music Recognition. The free recognitions may be used up.", action: .audd)
+                message("Couldn't find the song", detail: "The main service didn't answer, and AudD didn't accept your backup token. Check it in Settings → Music Recognition.", action: .audd)
             }
         }
         .padding(.horizontal, 24)
@@ -292,7 +350,7 @@ struct SongRecognitionSheet: View {
                 }
                 .buttonStyle(.glass)
             case .audd:
-                Button("Get a Token") {
+                Button("Open AudD") {
                     if let url = URL(string: "https://dashboard.audd.io") { openURL(url) }
                 }
                 .buttonStyle(.glass)
@@ -301,7 +359,7 @@ struct SongRecognitionSheet: View {
     }
 }
 
-/// Settings → Music Recognition: the listener's own AudD token.
+/// Settings → Music Recognition: the listener's own AudD token, which is only a backup.
 struct RecognitionSettingsView: View {
     @Environment(AppModel.self) private var app
 
@@ -309,11 +367,11 @@ struct RecognitionSettingsView: View {
         @Bindable var settings = app.settings
         Form {
             Section {
-                SecureField("AudD API token", text: $settings.recognitionToken)
+                SecureField("AudD API token (optional)", text: $settings.recognitionToken)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
             } footer: {
-                Text("Music Recognition sends 12 seconds of what the microphone hears to AudD, a recognition service, and nothing else. A free account gives 300 recognitions; after that AudD charges for more. Get a token at dashboard.audd.io.")
+                Text("Koda recognizes a song by making a fingerprint of 12 seconds of what the microphone hears on this iPhone, and sending only the fingerprint to Shazam's service. No token is needed.\n\nIf that service doesn't answer, Koda can send the recording to AudD instead, with your own token: a free account gives 300 recognitions, then AudD charges.")
             }
             Section {
                 Link("Open dashboard.audd.io", destination: URL(string: "https://dashboard.audd.io")!)

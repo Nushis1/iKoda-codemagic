@@ -167,13 +167,13 @@ struct SettingsView: View {
                             RecognitionSettingsView()
                         } label: {
                             LabeledContent {
-                                Text(app.settings.recognitionToken.isEmpty ? "Needs a Token" : "Ready")
+                                Text(app.settings.recognitionToken.isEmpty ? "Ready" : "AudD Backup")
                             } label: {
                                 SettingLabel("Music Recognition", systemImage: "waveform", tint: .blue)
                             }
                         }
                     } footer: {
-                        Text("Recognize a playing song from Search. It uses your own free AudD token.")
+                        Text("Recognize a playing song from Search. An AudD token is optional, as a backup.")
                     }
                 }
 
