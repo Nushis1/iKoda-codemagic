@@ -6,6 +6,7 @@ struct RootView: View {
     @Environment(Player.self) private var player
     @State private var homePath: [Route] = []
     @State private var radioPath: [Route] = []
+    @State private var discoverPath: [Route] = []
     @State private var libraryPath: [Route] = []
     @State private var searchPath: [Route] = []
     @State private var videosPath: [Route] = []
@@ -45,6 +46,11 @@ struct RootView: View {
                 Tab("Radio", systemImage: "dot.radiowaves.left.and.right", value: AppTab.radio) {
                     NavigationStack(path: $radioPath) {
                         RadioView().routeDestinations()
+                    }
+                }
+                Tab("Discover", systemImage: "sparkles.rectangle.stack.fill", value: AppTab.discover) {
+                    NavigationStack(path: $discoverPath) {
+                        DiscoverView().routeDestinations()
                     }
                 }
                 Tab("Library", systemImage: "square.stack.fill", value: AppTab.library) {
@@ -123,6 +129,7 @@ struct RootView: View {
         .onChange(of: model.roster.activeID) {
             homePath = []
             radioPath = []
+            discoverPath = []
             libraryPath = []
             searchPath = []
             videosPath = []
@@ -144,6 +151,7 @@ struct RootView: View {
             switch model.selectedTab {
             case .home: homePath.append(route)
             case .radio: radioPath.append(route)
+            case .discover: discoverPath.append(route)
             case .library: libraryPath.append(route)
             case .videos: videosPath.append(route)
             case .subscriptions: subscriptionsPath.append(route)

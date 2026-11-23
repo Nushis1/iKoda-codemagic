@@ -405,7 +405,7 @@ struct TasteDeckPage: View {
     }
 }
 
-private struct DeckCardView: View {
+struct DeckCardView: View {
     enum Phase { case waiting, loading, playing }
     let card: TasteModel.Card
     let state: Phase
@@ -453,7 +453,7 @@ private struct DeckCardView: View {
     }
 }
 
-private struct DeckButton: View {
+struct DeckButton: View {
     let systemImage: String
     let label: String
     let tint: Color

@@ -120,6 +120,7 @@ Koda has two modes, as Koda for Android does. Switch between them from the butto
 ### Finding music
 
 - Search with suggestions and filters, or by voice, recognized on the device
+- **Discover**: a tab of songs to swipe through, right to like, left to skip, down to keep in a Listen Later playlist; every answer teaches the next songs, so it fits your taste better as you go
 - **Music Recognition**: tap the waveform in Search and Koda listens, names the song and plays it
 - Paste a YouTube or YouTube Music link to open it; `koda://` links work from Shortcuts
 - Moods and genres to browse

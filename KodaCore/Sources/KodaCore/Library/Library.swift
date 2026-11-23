@@ -32,6 +32,8 @@ public final class Library {
     public private(set) var notInterested = NotInterested()
     /// The artists, genres and songs picked in taste setup.
     public private(set) var taste = TasteProfile()
+    /// What Discover has learned from the listener's swipes.
+    public private(set) var discover = DiscoverTaste()
     /// Videos watched, most recent first, one entry each: Continue Watching, and what a
     /// signed-out video Home is built from.
     public private(set) var watched: [Video] = []
@@ -264,6 +266,32 @@ public final class Library {
 
     public func clearTaste() {
         taste = TasteProfile()
+        save()
+    }
+
+    // MARK: Discover
+
+    /// The playlist Discover's swipe down keeps songs in.
+    public static let listenLaterName = "Listen Later"
+
+    /// A swipe in Discover: learned from, and acted on: right likes the song, down adds it to the
+    /// Listen Later playlist, left only remembers it was passed.
+    public func answerDiscover(_ answer: DiscoverTaste.Answer, song: Song) {
+        discover.record(answer, song: song)
+        switch answer {
+        case .like:
+            if !isLiked(song) { setLiked(song, true) }
+        case .later:
+            let id = userPlaylists.first { $0.name == Self.listenLaterName }?.id ?? createPlaylist(named: Self.listenLaterName).id
+            add([song], toPlaylist: id)
+        case .skip:
+            break
+        }
+        save()
+    }
+
+    public func clearDiscover() {
+        discover = DiscoverTaste()
         save()
     }
 
@@ -534,6 +562,7 @@ public final class Library {
         var lyricsOffsets: [String: TimeInterval] = [:]
         var notInterested = NotInterested()
         var taste = TasteProfile()
+        var discover = DiscoverTaste()
         var watched: [Video] = []
         var videoProgress: [String: VideoProgress] = [:]
         var androidPlaysImportedThrough: Date?
@@ -556,6 +585,7 @@ public final class Library {
             lyricsOffsets = try c.decodeIfPresent([String: TimeInterval].self, forKey: .lyricsOffsets) ?? [:]
             notInterested = try c.decodeIfPresent(NotInterested.self, forKey: .notInterested) ?? NotInterested()
             taste = try c.decodeIfPresent(TasteProfile.self, forKey: .taste) ?? TasteProfile()
+            discover = try c.decodeIfPresent(DiscoverTaste.self, forKey: .discover) ?? DiscoverTaste()
             watched = try c.decodeIfPresent([Video].self, forKey: .watched) ?? []
             videoProgress = try c.decodeIfPresent([String: VideoProgress].self, forKey: .videoProgress) ?? [:]
             androidPlaysImportedThrough = try c.decodeIfPresent(Date.self, forKey: .androidPlaysImportedThrough)
@@ -588,6 +618,7 @@ public final class Library {
         lyricsOffsets = snapshot.lyricsOffsets
         notInterested = snapshot.notInterested
         taste = snapshot.taste
+        discover = snapshot.discover
         watched = snapshot.watched
         videoProgress = snapshot.videoProgress
         androidPlaysImportedThrough = snapshot.androidPlaysImportedThrough
@@ -663,6 +694,7 @@ public final class Library {
         snapshot.lyricsOffsets = lyricsOffsets
         snapshot.notInterested = notInterested
         snapshot.taste = taste
+        snapshot.discover = discover
         snapshot.watched = watched
         snapshot.videoProgress = videoProgress
         snapshot.androidPlaysImportedThrough = androidPlaysImportedThrough

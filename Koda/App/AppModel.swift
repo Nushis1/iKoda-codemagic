@@ -18,6 +18,8 @@ final class AppModel {
     let profilePhotos: ProfilePhotos
     /// The active profile's Home, shared by the phone's tab and the Mac's page; a new one per profile.
     private(set) var home: HomeModel
+    /// The songs Discover offers, from the swipes the active profile has made.
+    let discover: DiscoverModel
     let settings = AppSettings()
     let downloads: Downloads
     let lastFM: LastFM
@@ -118,6 +120,7 @@ final class AppModel {
         profilePhotos = ProfilePhotos(roster: roster)
         library = Library(directory: roster.folder(for: roster.activeID))
         home = HomeModel(profile: roster.activeID)
+        discover = DiscoverModel(music: music, library: library)
         sleepTimer = SleepTimer(player: player)
         let settings = settings
         // Songs can be gigabytes; they come back from YouTube, so they stay out of iCloud backups.
@@ -231,6 +234,7 @@ final class AppModel {
         guard roster.activeID != leaving.id else { return }
         forgetVideoState()
         home = HomeModel(profile: roster.activeID)
+        discover.forgetDeck()
         moveSession(from: leaving, to: roster.active)
     }
 
@@ -391,15 +395,15 @@ final class AppModel {
     }
 }
 
-/// The iPhone's tabs: Home, Library and Search in music mode; Videos, Subscriptions, the
+/// The iPhone's tabs: Home, Radio, Discover, Library and Search in music mode; Videos, Subscriptions, the
 /// watched list and Search in video mode.
 enum AppTab: Hashable {
-    case home, radio, library, search
+    case home, radio, discover, library, search
     case videos, subscriptions, watched, videoSearch
 
     var mode: AppSettings.Mode {
         switch self {
-        case .home, .radio, .library, .search: .music
+        case .home, .radio, .discover, .library, .search: .music
         case .videos, .subscriptions, .watched, .videoSearch: .video
         }
     }

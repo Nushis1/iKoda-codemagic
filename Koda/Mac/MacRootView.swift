@@ -168,6 +168,10 @@ struct MacRootView: View {
             case .library:
                 libraryExpanded = true
                 section = .recent
+            // Discover is the iPhone's; the Mac's menu has no way to it.
+            case .discover:
+                musicExpanded = true
+                section = .home
             case .videos:
                 videosExpanded = true
                 section = .videos
