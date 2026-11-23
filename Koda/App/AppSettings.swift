@@ -147,6 +147,8 @@ final class AppSettings {
     var remindsToRenew: Bool { didSet { defaults.set(remindsToRenew, forKey: Keys.renewalReminders) } }
     /// The playing song on the listener's Discord profile, through the Discord app on the Mac.
     var sharesOnDiscord: Bool { didSet { defaults.set(sharesOnDiscord, forKey: Keys.discordPresence) } }
+    /// The listener's own AudD token, which Music Recognition needs.
+    var recognitionToken: String { didSet { defaults.set(recognitionToken, forKey: Keys.recognitionToken) } }
     var mode: Mode { didSet { defaults.set(mode.rawValue, forKey: Keys.mode) } }
     /// Video mode (YouTube itself) and the Music/Video switch that leads to it. Off until turned
     /// on in Settings or onboarding; turning it off goes back to music.
@@ -194,6 +196,7 @@ final class AppSettings {
         static let automaticBackup = "koda.backup.automatic"
         static let renewalReminders = "koda.renewal.reminders"
         static let discordPresence = "koda.discord.presence"
+        static let recognitionToken = "koda.recognition.auddToken"
         static let onboarding = "koda.onboarding.seen"
         static let mode = "koda.mode"
         static let videoModeEnabled = "koda.video.enabled"
@@ -229,6 +232,7 @@ final class AppSettings {
         keepsAutomaticBackup = d.object(forKey: Keys.automaticBackup) as? Bool ?? true
         remindsToRenew = d.object(forKey: Keys.renewalReminders) as? Bool ?? true
         sharesOnDiscord = d.object(forKey: Keys.discordPresence) as? Bool ?? false
+        recognitionToken = d.string(forKey: Keys.recognitionToken) ?? ""
         hasSeenOnboarding = d.bool(forKey: Keys.onboarding)
         let savedMode = d.string(forKey: Keys.mode).flatMap(Mode.init(rawValue:)) ?? .music
         mode = savedMode

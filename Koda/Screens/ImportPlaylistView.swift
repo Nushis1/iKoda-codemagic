@@ -48,7 +48,7 @@ final class PlaylistImportModel {
                     Task { @MainActor in self?.progress(done, total) }
                 }
                 guard !result.songs.isEmpty else {
-                    self?.phase = .failed("None of the \(result.total) songs could be found on YouTube Music.")
+                    self?.phase = .failed("Koda couldn't find any of the \(result.total) songs.")
                     return
                 }
                 let playlist = library.createPlaylist(named: result.name, songs: result.songs)
@@ -118,7 +118,7 @@ struct ImportPlaylistView: View {
                 case .matching(let done, let total):
                     Section {
                         ProgressView(value: Double(done), total: Double(max(total, 1)))
-                        Text("Finding songs on YouTube Music: \(done) of \(total)")
+                        Text("Finding songs: \(done) of \(total)")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } footer: {

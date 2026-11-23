@@ -337,7 +337,7 @@ enum SchemaIntentError: Error, CustomLocalizedStringResourceConvertible {
 
     var localizedStringResource: LocalizedStringResource {
         switch self {
-        case .nothingFound: "Koda couldn't find that on YouTube Music."
+        case .nothingFound: "Koda couldn't find that."
         case .songsOnly: "That works with songs only."
         }
     }

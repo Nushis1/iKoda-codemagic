@@ -161,6 +161,22 @@ struct SettingsView: View {
                     Text("Keep a record of what you play on your Last.fm profile.")
                 }
 
+                if !Platform.isMac {
+                    Section {
+                        NavigationLink {
+                            RecognitionSettingsView()
+                        } label: {
+                            LabeledContent {
+                                Text(app.settings.recognitionToken.isEmpty ? "Needs a Token" : "Ready")
+                            } label: {
+                                SettingLabel("Music Recognition", systemImage: "waveform", tint: .blue)
+                            }
+                        }
+                    } footer: {
+                        Text("Recognize a playing song from Search. It uses your own free AudD token.")
+                    }
+                }
+
                 Section {
                     Button {
                         tuningTaste = true

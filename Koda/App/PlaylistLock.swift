@@ -85,6 +85,8 @@ struct LockedPlaylistView: View {
         }
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbarVisibility(.hidden, for: .tabBar)
+        .onAppear { app.showsLockScreen = true }
+        .onDisappear { app.showsLockScreen = false }
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityLabel("\(playlist.name) is locked")
         .accessibilityHint("Unlocks with \(method)")
