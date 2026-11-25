@@ -174,6 +174,8 @@ final class SongRecognition {
         case notFound(HeardSong)
         case noMatch
         case blocked
+        /// A link to something Koda can't take sound from.
+        case badLink
         /// The backup service refused the token, and the first one didn't answer.
         case badToken
     }
@@ -183,27 +185,49 @@ final class SongRecognition {
     /// Long enough for a chorus; the length a fingerprint covers.
     private static let seconds = SoundSignature.seconds
 
-    /// Names the song with a fingerprint made here; if that service doesn't answer and the listener
-    /// has given an AudD token, the recording goes to AudD instead.
-    func start(music: YouTubeMusic, token: String) async {
+    /// Names the song in what the microphone hears, or in the video behind `link`, with a fingerprint
+    /// made here; if that service doesn't answer and the listener has given an AudD token, the sound
+    /// goes to AudD instead. A link whose page names the song is believed when the sound isn't known.
+    func start(music: YouTubeMusic, token: String, link: URL? = nil) async {
         phase = .listening
-        guard await AVAudioApplication.requestRecordPermission() else {
-            phase = .blocked
-            return
+        var samples: [Float]
+        var named: HeardSong?
+        if let link {
+            do {
+                let audio = try await LinkAudio.load(link, music: music)
+                samples = audio.samples
+                named = audio.named
+            } catch {
+                if !Task.isCancelled { phase = .badLink }
+                return
+            }
+        } else {
+            guard await AVAudioApplication.requestRecordPermission() else {
+                phase = .blocked
+                return
+            }
+            guard let recorded = try? await record(seconds: Self.seconds), !Task.isCancelled else {
+                if !Task.isCancelled { phase = .noMatch }
+                return
+            }
+            samples = recorded
         }
-        guard let samples = try? await record(seconds: Self.seconds), !Task.isCancelled else {
-            if !Task.isCancelled { phase = .noMatch }
-            return
-        }
+        guard !Task.isCancelled else { return }
         var heard: HeardSong?
         var answered = true
-        do {
-            let signature = await Task.detached(priority: .userInitiated) { SoundSignature(samples: samples) }.value
-            heard = try await askShazam(signature)
-        } catch {
-            answered = false
+        // Under two seconds is no song, whatever the service would say.
+        if samples.count < 2 * SoundSignature.sampleRate {
+            samples = []
+        } else {
+            do {
+                let sound = samples
+                let signature = await Task.detached(priority: .userInitiated) { SoundSignature(samples: sound) }.value
+                heard = try await askShazam(signature)
+            } catch {
+                answered = false
+            }
         }
-        if !answered, !token.isEmpty {
+        if !answered, !token.isEmpty, !samples.isEmpty {
             do {
                 heard = try await askAudD(samples, token: token)
             } catch RecognitionError.token {
@@ -212,6 +236,7 @@ final class SongRecognition {
             } catch {}
         }
         guard !Task.isCancelled else { return }
+        if heard == nil { heard = named }
         guard let heard else {
             phase = .noMatch
             return
@@ -225,6 +250,8 @@ final class SongRecognition {
 
 /// The recognition sheet: listening, then the song with what can be done with it.
 struct SongRecognitionSheet: View {
+    /// A link to take the sound from instead of listening; nil to listen.
+    var link: URL?
     /// Called when a song is played from here, so the music that was paused for listening isn't resumed over it.
     let onPlay: () -> Void
     let onSearch: (String) -> Void
@@ -235,9 +262,15 @@ struct SongRecognitionSheet: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var recognition = SongRecognition()
     @State private var attempt = 0
+    /// A link pasted into the sheet, which replaces listening; and listening chosen again after one.
+    @State private var pasted: URL?
+    @State private var listensInstead = false
+
+    private var activeLink: URL? { listensInstead ? nil : (pasted ?? link) }
 
     private enum Action {
         case retry
+        case microphone
         case settings
         case audd
     }
@@ -253,6 +286,8 @@ struct SongRecognitionSheet: View {
                 result(heard, song: nil)
             case .noMatch:
                 message("Couldn't find the song", detail: "Hold your iPhone closer to the music and try again.", action: .retry)
+            case .badLink:
+                message("Couldn't find the song", detail: "Koda can take the sound from YouTube and TikTok links.", action: .microphone)
             case .blocked:
                 message("Koda can't listen", detail: "Allow the microphone for Koda in Settings.", action: .settings)
             case .badToken:
@@ -270,21 +305,24 @@ struct SongRecognitionSheet: View {
         }
         .presentationDetents([.height(420)])
         .presentationDragIndicator(.visible)
-        .task(id: attempt) { await recognition.start(music: app.music, token: app.settings.recognitionToken) }
+        .task(id: "\(attempt) \(activeLink?.absoluteString ?? "")") {
+            await recognition.start(music: app.music, token: app.settings.recognitionToken, link: activeLink)
+        }
         // Going to an artist or album from the menu closes the sheet.
         .onChange(of: app.pendingRoute != nil) { _, pending in if pending { dismiss() } }
     }
 
     private var listening: some View {
         VStack(spacing: 22) {
-            Image(systemName: "waveform")
+            Image(systemName: activeLink == nil ? "waveform" : "link")
                 .font(.system(size: 38, weight: .semibold))
                 .foregroundStyle(Color.accentColor)
                 .symbolEffect(.variableColor.iterative, isActive: !reduceMotion)
                 .frame(width: 96, height: 96)
                 .glassEffect(.regular, in: .circle)
-            Text("Listening…").font(.title3.weight(.semibold))
-            Text("Hold your iPhone near the music").foregroundStyle(.secondary)
+            Text(activeLink == nil ? "Listening…" : "Listening to the link…").font(.title3.weight(.semibold))
+            Text(activeLink == nil ? "Hold your iPhone near the music" : "This takes a few seconds").foregroundStyle(.secondary)
+            if activeLink == nil { pasteLink }
         }
         .sensoryFeedback(.start, trigger: attempt)
     }
@@ -344,6 +382,11 @@ struct SongRecognitionSheet: View {
             case .retry:
                 Button("Try Again") { attempt += 1 }
                     .buttonStyle(.glass)
+                pasteLink
+            case .microphone:
+                Button("Listen Instead") { listensInstead = true }
+                    .buttonStyle(.glass)
+                pasteLink
             case .settings:
                 Button("Open Settings") {
                     if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
@@ -356,6 +399,20 @@ struct SongRecognitionSheet: View {
                 .buttonStyle(.glass)
             }
         }
+    }
+}
+
+extension SongRecognitionSheet {
+    /// A TikTok or YouTube link from the clipboard, whose sound is recognized instead of what is heard.
+    /// `PasteButton` asks for no permission: the person's tap is the permission.
+    fileprivate var pasteLink: some View {
+        PasteButton(payloadType: URL.self) { links in
+            guard let url = links.first else { return }
+            pasted = url
+            listensInstead = false
+        }
+        .buttonBorderShape(.capsule)
+        .labelStyle(.titleAndIcon)
     }
 }
 
@@ -375,6 +432,13 @@ struct RecognitionSettingsView: View {
             }
             Section {
                 Link("Open dashboard.audd.io", destination: URL(string: "https://dashboard.audd.io")!)
+            }
+            Section {
+                Text("To find the song in a TikTok or YouTube video, copy its link and tap Paste in Recognize Song. To do it from the Share button, make a shortcut in the Shortcuts app that receives URLs, applies URL Encode to its input, and opens the URL koda://recognize?url= followed by the encoded text.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("From a Video")
             }
         }
         .navigationTitle("Music Recognition")

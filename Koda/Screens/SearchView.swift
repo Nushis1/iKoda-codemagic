@@ -104,6 +104,8 @@ struct SearchView: View {
             Text("Your Library").tag(SearchModel.Scope.library)
         }
         .onSubmit(of: .search) { submit(model.query) }
+        .onAppear(perform: takeSearchRequest)
+        .onChange(of: app.searchRequest) { takeSearchRequest() }
         .onChange(of: model.query) { _, text in
             if text.isEmpty { model.clear() }
         }
@@ -143,6 +145,15 @@ struct SearchView: View {
         }
         .task(id: [model.query, model.scope == .library ? "library" : ""]) { await model.suggest(music: app.music) }
         .task { await model.loadMoods(music: app.music) }
+    }
+
+    /// A search asked for from elsewhere, such as a recognized song nobody could play.
+    private func takeSearchRequest() {
+        guard let text = app.searchRequest else { return }
+        app.searchRequest = nil
+        model.scope = .catalog
+        model.query = text
+        submit(text)
     }
 
     private func submit(_ text: String) {

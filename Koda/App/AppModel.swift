@@ -54,6 +54,10 @@ final class AppModel {
     var playlistTarget: PlaylistTarget?
     /// A shared link that could not be opened, shown as an alert.
     var linkError: String?
+    /// A link to recognize the sound of, from `koda://recognize?url=…`; the sheet for it shows while it is set.
+    var recognizingLink: URL?
+    /// A search asked for from elsewhere (a recognized song's "Search for It"); Search takes it up.
+    var searchRequest: String?
     /// Locked playlists opened since Koda was last in the background (see PlaylistLock.swift).
     var unlockedPlaylists: Set<UUID> = []
     /// True while a locked playlist's lock screen is showing, so the bar of the playing song isn't under it.
@@ -353,6 +357,14 @@ final class AppModel {
     /// Open a YouTube, YouTube Music or koda:// link: a song plays with its radio, anything else opens its page.
     @discardableResult
     func open(_ url: URL) -> Bool {
+        // koda://recognize?url=<a link>: what a Shortcut sends a link shared from TikTok or YouTube to.
+        if url.scheme?.lowercased() == "koda", url.host?.lowercased() == "recognize" {
+            guard !Platform.isMac,
+                  let value = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "url" })?.value,
+                  let link = URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines)), link.scheme?.hasPrefix("http") == true else { return false }
+            recognizingLink = link
+            return true
+        }
         guard let link = YouTubeLink(url) else { return false }
         openLink(link)
         return true

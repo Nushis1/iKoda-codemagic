@@ -140,6 +140,13 @@ struct RootView: View {
         .onOpenURL { url in
             if !model.open(url) { model.linkError = "Koda can open YouTube Music songs, albums, playlists and artists." }
         }
+        .sheet(isPresented: Binding(get: { model.recognizingLink != nil }, set: { if !$0 { model.recognizingLink = nil } })) {
+            SongRecognitionSheet(link: model.recognizingLink, onPlay: {}) { text in
+                model.searchRequest = text
+                model.selectedTab = .search
+            }
+            .appEnvironment(model)
+        }
         .alert("Couldn't Open Link", isPresented: Binding(get: { model.linkError != nil }, set: { if !$0 { model.linkError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
