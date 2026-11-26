@@ -90,12 +90,14 @@ public enum PlaylistSuggester {
     ///
     /// - Parameters:
     ///   - skippingSeeds: playlist songs that were asked about before; others are chosen if enough remain.
+    ///   - excluding: songs the listener asked not to get (Suggest Less, blocked phrases): never seeds or suggestions.
     ///   - skippingSongs: suggestions that were shown before, so a refresh brings new ones.
     public static func suggest(for playlist: [Song], music: YouTubeMusic, seedCount: Int = 5, limit: Int = 40,
-                               skippingSeeds: Set<String> = [], skippingSongs: Set<String> = []) async throws -> SuggestionResult {
+                               skippingSeeds: Set<String> = [], skippingSongs: Set<String> = [],
+                               excluding isExcluded: (Song) -> Bool = { _ in false }) async throws -> SuggestionResult {
         guard !playlist.isEmpty else { return SuggestionResult(suggestions: [], seedCount: 0, seedIDs: []) }
         var generator = SystemRandomNumberGenerator()
-        let seeds = pickSeeds(from: seedPool(playlist, skipping: skippingSeeds, count: seedCount),
+        let seeds = pickSeeds(from: seedPool(playlist.filter { !isExcluded($0) }, skipping: skippingSeeds, count: seedCount),
                               count: seedCount, using: &generator)
         var radios: [[Song]] = []
         var failure: Error?
@@ -118,7 +120,7 @@ public enum PlaylistSuggester {
         }
         if radios.isEmpty, let failure { throw failure }
         // Ranked deep, then the ones shown before are dropped: what is left starts where the last try ended.
-        let fresh = rank(radios: radios, playlist: playlist, limit: 400).filter { !skippingSongs.contains($0.id) }
+        let fresh = rank(radios: radios, playlist: playlist, limit: 400).filter { !skippingSongs.contains($0.id) && !isExcluded($0.song) }
         return SuggestionResult(suggestions: Array(fresh.prefix(limit)), seedCount: radios.count, seedIDs: seeds.map(\.id))
     }
 }

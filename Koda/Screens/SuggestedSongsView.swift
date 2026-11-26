@@ -66,17 +66,18 @@ struct SuggestedSongsView: View {
     private func load(refresh: Bool) async {
         guard let songs = current else { return }
         phase = .loading
+        let hidden = library.notInterested
         if !refresh {
             usedSeeds = []
             seenSongs = []
         }
         do {
             var result = try await PlaylistSuggester.suggest(
-                for: songs, music: app.music, skippingSeeds: usedSeeds, skippingSongs: seenSongs)
+                for: songs, music: app.music, skippingSeeds: usedSeeds, skippingSongs: seenSongs, excluding: hidden.hides)
             if result.suggestions.isEmpty, !seenSongs.isEmpty {
                 usedSeeds = []
                 seenSongs = []
-                result = try await PlaylistSuggester.suggest(for: songs, music: app.music)
+                result = try await PlaylistSuggester.suggest(for: songs, music: app.music, excluding: hidden.hides)
             }
             usedSeeds.formUnion(result.seedIDs)
             seenSongs.formUnion(result.suggestions.map(\.id))
