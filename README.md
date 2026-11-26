@@ -2,54 +2,43 @@
   <img src="docs/icon.png" width="120" alt="Koda icon"/>
 </p>
 
-<h1 align="center">Koda for iPhone and Mac</h1>
+<h1 align="center">Koda for iPhone</h1>
 
 <p align="center">
   <b>YouTube Music and YouTube, in one app written in SwiftUI with Liquid Glass.</b>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Nushis1/iKoda-codemagic/releases/latest"><img src="https://img.shields.io/github/v/release/Nushis1/iKoda-codemagic?style=for-the-badge&label=Download&color=FA5C5C" alt="Latest release"/></a>
-  <img src="https://img.shields.io/badge/iOS-26%2B-black?style=for-the-badge&logo=apple" alt="iOS 26 and newer"/>
-  <img src="https://img.shields.io/badge/macOS-26%2B-black?style=for-the-badge&logo=apple" alt="macOS 26 and newer"/>
-  <img src="https://img.shields.io/badge/Swift-6-F05138?style=for-the-badge&logo=swift&logoColor=white" alt="Swift 6"/>
-  <img src="https://img.shields.io/badge/SwiftUI-Liquid%20Glass-0A84FF?style=for-the-badge&logo=swift&logoColor=white" alt="SwiftUI with Liquid Glass"/>
+  <a href="https://github.com/Nushis1/iKoda-codemagic/releases/latest">
+    <img src="https://img.shields.io/github/v/release/Nushis1/iKoda-codemagic?style=for-the-badge&label=Download&color=FA5C5C&logo=apple&logoColor=white" alt="Download"/>
+  </a>
+  &nbsp;
+  <img src="https://img.shields.io/badge/iOS-26%2B-000000?style=for-the-badge&logo=apple&logoColor=white" alt="iOS 26+"/>
+  <img src="https://img.shields.io/badge/Swift-6-a434eb?style=for-the-badge&logo=swift&logoColor=white" alt="Swift 6"/>
+  &nbsp;
 </p>
 
-Koda plays music from YouTube Music and videos from YouTube, without ads. Use it with no account at all, or sign in to bring your likes, playlists, subscriptions and history with you. It is the Apple sibling of [Koda for Android](https://github.com/Ivorisnoob/Koda), built for iPhone and Mac rather than ported to them.
+Koda plays music from YouTube Music and videos from YouTube, without ads. Use it with no account at all, or sign in to bring your likes, playlists, subscriptions and history with you. It is the Apple sibling of [Koda for Android](https://github.com/Ivorisnoob/Koda).
 
-> **About this project.** Koda for iPhone and Mac is continued by [Nushis1](https://github.com/Nushis1). The original project was created by [Ivorisnoob](https://github.com/Ivorisnoob): [Ivorisnoob/iKoda](https://github.com/Ivorisnoob/iKoda), Koda for iOS and macOS, a SwiftUI music player for YouTube Music with Liquid Glass.
+> **About this project.** Koda for iPhone is continued by [Nushis1](https://github.com/Nushis1). The original project was created by [Ivorisnoob](https://github.com/Ivorisnoob): [Ivorisnoob/iKoda](https://github.com/Ivorisnoob/iKoda), Koda for iOS, a SwiftUI music player for YouTube Music with Liquid Glass.
 
-## Screenshots
-
-### Mac
-
+<h1 align="center">Screenshots</h1>
 <table>
   <tr>
-    <td align="center"><img src="Screenshots/mac/home.png" width="420" alt="Home"><br><sub>Home</sub></td>
-    <td align="center"><img src="Screenshots/mac/now-playing.png" width="420" alt="Now Playing with lyrics"><br><sub>Now Playing with lyrics</sub></td>
+    <td align="center" width="25%"><img src="Screenshots/ios/home.png" width="250" alt="Home"><br><sub>Home</sub></td>
+    <td align="center" width="25%"><img src="Screenshots/ios/now-playing.png" width="250" alt="Now Playing"><br><sub>Now Playing</sub></td>
+    <td align="center" width="25%"><img src="Screenshots/ios/now-playing-lyrics.png" width="250" alt="Lyrics"><br><sub>Synced Lyrics</sub></td>
+    <td align="center" width="25%"><img src="Screenshots/ios/up-next.png" width="250" alt="Up Next"><br><sub>Up Next</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="Screenshots/mac/home-lyrics.png" width="420" alt="Lyrics beside any page"><br><sub>Lyrics beside any page</sub></td>
-    <td align="center"><img src="Screenshots/mac/up-next.png" width="420" alt="Up Next"><br><sub>Up Next</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="Screenshots/mac/playlist.png" width="420" alt="Your playlist"><br><sub>Your playlist</sub></td>
-    <td align="center"><img src="Screenshots/mac/stats.png" width="420" alt="Listening stats"><br><sub>Listening stats</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="Screenshots/mac/video.png" width="420" alt="Video mode"><br><sub>Video mode</sub></td>
-    <td align="center"><img src="Screenshots/mac/settings.png" width="420" alt="Settings, laid out like System Settings"><br><sub>Settings, laid out like System Settings</sub></td>
+    <td align="center"><img src="Screenshots/ios/playlist.png" width="250" alt="Playlist"><br><sub>Playlist</sub></td>
+    <td align="center"><img src="Screenshots/ios/video.png" width="250" alt="Videos"><br><sub>Videos</sub></td>
+    <td align="center"><img src="Screenshots/ios/stats.png" width="250" alt="Stats"><br><sub>Listening Stats</sub></td>
+    <td align="center"><img src="Screenshots/ios/settings.png" width=250" alt="Settings"><br><sub>Settings</sub></td>
   </tr>
 </table>
 
-## Download
-
-Get **`Koda.ipa`** (iPhone) and **`Koda.dmg`** (Mac) from **[the latest release](https://github.com/Nushis1/iKoda-codemagic/releases/latest)**. Koda needs iOS 26 or macOS 26 or later.
-
-## Installing
-
-### iPhone
+<h1 align="center">Installing</h1>
 
 Koda isn't on the App Store, so you sign it yourself with your Apple ID, using any of these:
 
@@ -67,23 +56,13 @@ Because the app is signed with a developer account, not by Apple, iOS needs **De
 
 If Sideloadly fails on a free Apple ID (free accounts have a small limit on app IDs, and the Quick Play widget needs its own), open **Advanced Options** and turn on removing app extensions. Koda then installs without the widget and controls.
 
-### Mac
+<h1 align="center">Music and Video</h1>
 
-One app for Apple silicon and Intel. Open `Koda.dmg` and drag Koda into Applications.
+<p align="center">Koda has two modes, as Koda for Android does. Switch between them from the button at the top of Home on the iPhone; each has its own tabs, and whatever is playing carries on.</p>
 
-Koda isn't notarized by Apple, so the first time macOS says it can't check it. Open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** beside Koda. Or, in Terminal:
+<h1 align="center">Features</h1>
 
-```sh
-xattr -dr com.apple.quarantine /Applications/Koda.app
-```
-
-## Music and Video
-
-Koda has two modes, as Koda for Android does. Switch between them from the button at the top of Home on the iPhone, or the top of the sidebar on the Mac; each has its own tabs or sidebar, and whatever is playing carries on.
-
-## Features
-
-### Music
+<h1>Music</h1>
 
 - **Your Mix** on Home, woven from radios of the artists you play most; **Jump back in**, **Quick picks**, your top artists and a row of **Charts**
 - Signed in, Quick picks come from your own YouTube Music Home
@@ -92,7 +71,7 @@ Koda has two modes, as Koda for Android does. Switch between them from the butto
 - Shuffle, repeat, autoplay radio, and a queue you can drag, swipe and undo
 - Skip buttons, a sleep timer, volume normalization, and swiping the mini player to skip
 
-### Video
+<h1>Video</h1>
 
 - **Home** and **Subscriptions** feeds, search, and channels with their Videos and Live tabs, sorted by Latest, Popular or Oldest, and an About page with their links
 - **Explore** Music, Live, News, Sports and Learning, signed in or not
@@ -103,21 +82,21 @@ Koda has two modes, as Koda for Android does. Switch between them from the butto
 - Videos **pick up where you left off**, with a progress bar on each thumbnail, and the next one plays after a short countdown
 - Leave the video's page and it keeps playing in the mini player
 
-### Your account and profiles
+<h1>Your account and profiles</h1>
 
 - Sign in to YouTube Music to sync liked songs, albums, playlists and artists both ways, and to send what you play and watch to your YouTube history
 - **Profiles** for everyone who uses the device, each with its own library, history and account, and a one-tap switch between them
 - A welcome on first launch that sets up your taste: artists, genres and a deck of songs to keep or skip
 - **Suggest Less** for songs and artists you don't want offered again, **Blocked Phrases** that keep any song with that phrase in its title out of radio, mixes and autoplay, and a full listening **History**
 
-### Lyrics
+<h1>Lyrics</h1>
 
 - Word by word from YouLyPlus and BetterLyrics, line by line from LRCLIB, chosen automatically
 - Duets on their singer's side, backing vocals under their line, long notes that swell
 - Tap a line to jump to it; share up to six lines as a card in the song's colours
 - **Translation** or **pronunciation** under each line, and timing you can shift earlier or later per song
 
-### Finding music
+<h1>Finding music</h1>
 
 - Search with suggestions and filters, or by voice, recognized on the device
 - **Discover**: a tab of songs to swipe through, right to like, left to skip, down to keep in a Listen Later playlist; every answer teaches the next songs, so it fits your taste better as you go
@@ -125,7 +104,7 @@ Koda has two modes, as Koda for Android does. Switch between them from the butto
 - Paste a YouTube or YouTube Music link to open it; `koda://` links work from Shortcuts
 - Moods and genres to browse
 
-### Your library
+<h1>Your library</h1>
 
 - Liked songs, saved albums, playlists and artists, and playlists of your own, with a photo and a description
 - **Lock a playlist with Face ID**: it opens and plays only after you unlock it
@@ -138,53 +117,18 @@ Koda has two modes, as Koda for Android does. Switch between them from the butto
 - Back up the whole library to one file, or import it from Koda for Android
 - An automatic copy of **every profile** (likes, history, stats, playlists and their locks, searches, blocked phrases) in the iPhone's Keychain, which survives deleting the app, so a reinstall brings it all back by itself, signed-in accounts included (same Apple ID; Settings → Back Up and Restore)
 
-### Siri, Shortcuts and widgets
+<h1>Siri, Shortcuts and widgets</h1>
 
 - Ask Siri or Shortcuts to play your liked songs, a playlist or anything you name, start a radio, or like the song playing; Koda's songs and playlists show up in Spotlight
-- A **Quick Play** widget for the Home Screen, Lock Screen and Mac, and Control Center controls on the iPhone
+- A **Quick Play** widget for the Home Screen and Lock Screen, and Control Center controls on the iPhone
 
-### Last.fm and Discord
 
-- Scrobble to your Last.fm profile with your own free [Last.fm API account](https://www.last.fm/api/account/create); Koda never asks for your password, and plays made offline are sent later
-- On the Mac, show what you're listening to on your Discord profile
 
-## On the Mac
-
-Built for the Mac rather than stretched from the phone:
-
-- A sidebar for each mode. Music: Home, Browse, your library and playlists, with Up Next and today's listening at its foot. Video: Home, Subscriptions, History, Watch Later, Liked Videos, your channels and Explore
-- A player bar under every page; Now Playing opens out of its cover, with lyrics or the queue beside it
-- Videos in **default** or **theater** view, as on YouTube's site, and full screen with nothing but the picture
-- Settings in a window of its own, laid out like System Settings
-
-| Shortcut | Does |
-|---|---|
-| Space | Play or pause |
-| ⌘→ / ⌘← | Next / previous song |
-| ⌥⌘→ / ⌥⌘← | Skip ahead / back within the song |
-| ⌘↑ / ⌘↓ | Volume up / down |
-| ⇧⌘P | Show or hide Now Playing |
-| ⇧⌘L / ⇧⌘U | Lyrics / queue |
-| ⌘1 / ⌘2 / ⌘F | Home / Library / Search |
-| ⌘R | Refresh |
-| ⌘, | Settings |
-
-On a video's page:
-
-| Key | Does |
-|---|---|
-| Space or K | Play or pause |
-| J / L | Back / ahead 10 seconds |
-| ← / → | Back / ahead 5 seconds |
-| F | Full screen (Esc leaves it) |
-| T | Theater view |
-| M | Mute |
-
-## Privacy
+<h1 align="center">Privacy</h1>
 
 Koda has no analytics and no server of its own. What you like, save, play and search is stored on your device and leaves it only when you back it up, or, if you sign in, to keep your YouTube account in step. Your sign-in stays in the device's Keychain. Requests go to YouTube and YouTube Music, to the lyrics services for lyrics, and to Last.fm or Discord only if you turn them on. Pausing listening history keeps your plays from going anywhere.
 
-## Building
+<h1 align="center">Building</h1>
 
 Xcode 26 or later. Notes on how parts of Koda work, and why, are in [`docs/`](docs).
 
@@ -192,37 +136,33 @@ Xcode 26 or later. Notes on how parts of Koda work, and why, are in [`docs/`](do
 cd KodaCore && swift test                          # unit tests
 KODA_LIVE=1 swift test --filter Live               # against live YouTube, plays muted audio
 xcodebuild -project Koda.xcodeproj -scheme Koda -destination 'generic/platform=iOS' build
-xcodebuild -project Koda.xcodeproj -scheme Koda -destination 'generic/platform=macOS,variant=Mac Catalyst' \
-  ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE=Manual build
 ```
 
-CI runs on Codemagic and is defined in `codemagic.yaml`; builds and their artifacts are on the Codemagic Builds page. It has three workflows:
+CI runs on Codemagic and is defined in `codemagic.yaml`; builds and their artifacts are on the Codemagic Builds page. It has two workflows:
 
 | Workflow | Runs | Result |
 |---|---|---|
 | `ios-unsigned` | Every push to `main` or `beta`, and pull requests | Tests `KodaCore`, then builds `Koda.ipa` with an ad-hoc signature, for AltStore, SideStore and Sideloadly, which re-sign it with your Apple ID (free) |
-| `mac-universal` | Every push to `main` or `beta`, and pull requests | A universal (Apple silicon and Intel), ad-hoc signed `Koda.dmg` |
 | `ios-signed` | Only when you start it by hand | An Ad Hoc signed `Koda.ipa` for iPhones registered in your Apple Developer account. Needs a paid Apple Developer Program account, an App Store Connect API key, and a `code-signing` variable group holding `CERTIFICATE_PRIVATE_KEY`; the steps are at the top of `codemagic.yaml` |
 
-Codemagic may pack the `.dmg` inside a `*_artifacts.zip`; unzip it first. To use it, add the repository in Codemagic, choose `codemagic.yaml`, and create the webhook in the app's settings. The old GitHub Actions workflow is gone.
+To use it, add the repository in Codemagic, choose `codemagic.yaml`, and create the webhook in the app's settings. The old GitHub Actions workflow is gone.
 
 | Path | What |
 |---|---|
 | `KodaCore/` | Swift package with no UI: the InnerTube clients, parsers, stream resolution, accounts, lyrics, the library, the queue and the player |
-| `Koda/` | The SwiftUI app, with its Mac pages in `Koda/Mac` and video in `Koda/Video` |
+| `Koda/` | The SwiftUI app, with video in `Koda/Video` |
 | `KodaWidgets/` | The Quick Play widget and Control Center controls |
-| `codemagic.yaml` | Codemagic CI: the `ios-unsigned`, `ios-signed` (manual) and `mac-universal` workflows |
+| `codemagic.yaml` | Codemagic CI: the `ios-unsigned` and `ios-signed` (manual) workflows |
 
-## Feedback
+<h1 align="center">Feedback</h1>
 
-Found a bug or want something? Open an [issue](https://github.com/Nushis1/iKoda-codemagic/issues).
+<p align="center">Found a bug, have a suggestion, or want to request a feature? <a href="https://github.com/Nushis1/iKoda-codemagic/issues">Open an issue</a>.</p>
 
-## Thanks
+<h1 align="center">Thanks</h1>
 
-Lyrics come from [LRCLIB](https://lrclib.net), YouLyPlus and BetterLyrics.
-
-The app icon is by [sameerasw](https://github.com/sameerasw).
+* Lyrics come from [LRCLIB](https://lrclib.net), YouLyPlus and BetterLyrics.
+* The app icon is by [sameerasw](https://github.com/sameerasw).
 
 ---
 
-Koda is an unofficial client and is not affiliated with YouTube or Google.
+<p align="center">Koda is an unofficial client and is not affiliated with YouTube or Google.</p>

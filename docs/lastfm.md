@@ -1,12 +1,12 @@
 # Last.fm
 
-Scrobbling is optional and off on a fresh install. The logic is shared in `KodaCore/Sources/KodaCore/LastFM/`; the iPhone shows it in Settings (`LastFMSettingsView`) and the Mac as a sidebar page (`MacLastFMView`), with shared pieces in `Components/LastFMShared.swift`. It follows Koda for Android's design (`docs/lastfm.md` in that repository).
+Scrobbling is optional and off on a fresh install. The logic is shared in `KodaCore/Sources/KodaCore/LastFM/` and exposed in iPhone Settings (`LastFMSettingsView`), with shared UI components in `Components/LastFMShared.swift`. It follows Koda for Android's design (`docs/lastfm.md` in that repository).
 
 ## Signing in
 
 Koda ships no Last.fm credentials and never asks for a password. Each listener registers their own API account at https://www.last.fm/api/account/create (Callback URL left empty) and enters its API key and shared secret, each 32 hex digits.
 
-The desktop token flow: `auth.getToken`, then the approval page `https://www.last.fm/api/auth/?api_key=…&token=…`, then `auth.getSession`. The page opens in a `WebAuthenticationSession`; Last.fm's desktop flow can't call back, so closing the sheet is the cue to finish. If the listener hadn't approved yet, error 14 says so and the screen offers the page again or "I've Approved Koda". A token lasts an hour.
+The sign-in flow uses `auth.getToken`, followed by the Last.fm approval page `https://www.last.fm/api/auth/?api_key=…&token=…`, and then `auth.getSession`. If approval is still pending, error 14 is shown and the screen offers the approval page again or an option to confirm approval. A token lasts an hour.
 
 Signing in as a different account than before empties the queue and the cached profile, so no play is ever sent under the wrong name.
 
@@ -23,7 +23,7 @@ Qualifying plays are queued with the time they started and sent oldest first, ea
 
 ## Privacy and storage
 
-- API key, secret, session and pending token live in the Keychain, this device only, never synced. Where the Keychain refuses (an ad-hoc signed Mac build has no access group), a file only the user can read stands in, so Last.fm works rather than failing.
+- API key, secret, session and pending token live in the Keychain on this device only and are never synced.
 - The queue and cached profile are in `lastfm.json` in Application Support, excluded from backups, and not part of Koda's library backup: restoring a library never turns scrobbling on for another account.
 - Turning Last.fm off drops unsent plays. Pausing listening history pauses scrobbling too; nothing heard while paused is ever sent. Disconnect forgets the account and keys on this device.
 - Any change of what Koda may do bumps a generation, so a call already out never writes its result.
