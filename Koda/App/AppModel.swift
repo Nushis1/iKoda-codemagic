@@ -60,6 +60,8 @@ final class AppModel {
     var searchRequest: String?
     /// Locked playlists opened since Koda was last in the background (see PlaylistLock.swift).
     var unlockedPlaylists: Set<UUID> = []
+    /// Liked Songs opened since Koda was last in the background, when it is locked.
+    var likedUnlocked = false
     /// True while a locked playlist's lock screen is showing, so the bar of the playing song isn't under it.
     var showsLockScreen = false
     /// The sheet that adds a profile, asked for from a toolbar menu, the profile page or the Mac's sidebar.

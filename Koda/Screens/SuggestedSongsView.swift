@@ -4,7 +4,8 @@ import SwiftUI
 /// Songs that suit a playlist, from the radios of a few of its songs (see PlaylistSuggester). Tap a
 /// song to hear it, the plus to add it to the playlist; Refresh asks about other songs of the playlist.
 struct SuggestedSongsView: View {
-    let id: UUID
+    /// The playlist to suggest for; nil is Liked Songs.
+    var id: UUID?
 
     @Environment(AppModel.self) private var app
     @Environment(Player.self) private var player
@@ -14,6 +15,12 @@ struct SuggestedSongsView: View {
     /// What a Refresh must not repeat: the playlist songs already asked about and the suggestions already shown.
     @State private var usedSeeds = Set<String>()
     @State private var seenSongs = Set<String>()
+
+    /// The songs suggestions are for: the playlist's, or the liked ones; nil when the playlist is gone.
+    private var current: [Song]? {
+        guard let id else { return library.liked }
+        return library.userPlaylist(id)?.songs
+    }
 
     private enum Phase {
         case loading
@@ -57,7 +64,7 @@ struct SuggestedSongsView: View {
     /// A refresh asks about other songs of the playlist and leaves out what was already shown, so what
     /// comes up is new. When nothing new is left, it starts over with everything.
     private func load(refresh: Bool) async {
-        guard let playlist = library.userPlaylist(id) else { return }
+        guard let songs = current else { return }
         phase = .loading
         if !refresh {
             usedSeeds = []
@@ -65,11 +72,11 @@ struct SuggestedSongsView: View {
         }
         do {
             var result = try await PlaylistSuggester.suggest(
-                for: playlist.songs, music: app.music, skippingSeeds: usedSeeds, skippingSongs: seenSongs)
+                for: songs, music: app.music, skippingSeeds: usedSeeds, skippingSongs: seenSongs)
             if result.suggestions.isEmpty, !seenSongs.isEmpty {
                 usedSeeds = []
                 seenSongs = []
-                result = try await PlaylistSuggester.suggest(for: playlist.songs, music: app.music)
+                result = try await PlaylistSuggester.suggest(for: songs, music: app.music)
             }
             usedSeeds.formUnion(result.seedIDs)
             seenSongs.formUnion(result.suggestions.map(\.id))
@@ -81,7 +88,7 @@ struct SuggestedSongsView: View {
 
     /// What is worth showing now: not hidden by the listener, and not already added since.
     private func shown(_ result: SuggestionResult) -> [SongSuggestion] {
-        let have = Set(library.userPlaylist(id)?.songs.map(\.id) ?? [])
+        let have = Set((current ?? []).map(\.id))
         return result.suggestions.filter { !library.isHidden($0.song) && !have.contains($0.song.id) }
     }
 
@@ -93,7 +100,7 @@ struct SuggestedSongsView: View {
                 Label("No Suggestions", systemImage: "sparkles")
             } description: {
                 Text(result.seedCount == 0
-                     ? "Add a few songs to this playlist first."
+                     ? (id == nil ? "Like a few songs first." : "Add a few songs to this playlist first.")
                      : "Nothing new came up. Refresh to ask about other songs of the playlist.")
             } actions: {
                 Button("Refresh") { Task { await load(refresh: true) } }
@@ -107,20 +114,25 @@ struct SuggestedSongsView: View {
                                 player.play(suggestions.map(\.song), startAt: index)
                             }
                             Button {
-                                if library.add([suggestion.song], toPlaylist: id) > 0 { added += 1 }
+                                if let id {
+                                    if library.add([suggestion.song], toPlaylist: id) > 0 { added += 1 }
+                                } else {
+                                    library.setLiked(suggestion.song, true)
+                                    added += 1
+                                }
                             } label: {
-                                Image(systemName: "plus.circle.fill")
+                                Image(systemName: id == nil ? "heart.circle.fill" : "plus.circle.fill")
                                     .font(.title2)
                                     .symbolRenderingMode(.hierarchical)
                             }
                             .buttonStyle(.borderless)
-                            .accessibilityLabel("Add to Playlist")
+                            .accessibilityLabel(id == nil ? "Like" : "Add to Playlist")
                         }
                         .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 16))
                         .listRowSeparator(.hidden)
                     }
                 } header: {
-                    Text("Based on \(result.seedCount) \(result.seedCount == 1 ? "song" : "songs") of this playlist")
+                    Text("Based on \(result.seedCount) \(result.seedCount == 1 ? "song" : "songs") of \(id == nil ? "your liked songs" : "this playlist")")
                         .textCase(nil)
                 }
             }

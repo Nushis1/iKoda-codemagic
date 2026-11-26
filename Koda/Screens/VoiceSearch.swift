@@ -33,7 +33,8 @@ final class VoiceSearch {
     func start(onFinish: @escaping (String) -> Void) async {
         self.onFinish = onFinish
         let speech = await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
+            // Called on a background queue, so it mustn't be checked against the main actor: that stops the app.
+            SFSpeechRecognizer.requestAuthorization { @Sendable status in continuation.resume(returning: status) }
         }
         guard speech == .authorized else {
             phase = .blocked("Koda needs Speech Recognition to search by voice. You can allow it in Settings.")

@@ -81,8 +81,12 @@ struct SavedSongsView: View {
     @Environment(Player.self) private var player
     @Environment(Library.self) private var library
     @Environment(Downloads.self) private var downloads
+    @Environment(AppModel.self) private var app
     @AppStorage("koda.likedSort") private var sort: SongSort = .recent
     @State private var query = ""
+    /// Showing only the liked songs that look like another (the menu's Find Duplicates).
+    @State private var duplicatesOnly = false
+    @State private var showingSuggestions = false
 
     private var songs: [Song] {
         switch source {
@@ -107,7 +111,11 @@ struct SavedSongsView: View {
     }
 
     var body: some View {
-        if Platform.isMac { macBody } else { phoneBody }
+        if source == .liked, library.likedLocked, !app.likedUnlocked, !Platform.isMac {
+            LockedView(name: title, unlock: { await app.unlockLiked() }) {
+                Image(systemName: "heart.fill").resizable().scaledToFit().foregroundStyle(.pink).frame(width: 300, height: 300)
+            }
+        } else if Platform.isMac { macBody } else { phoneBody }
     }
 
     private var symbol: (String, Color) {
@@ -198,6 +206,9 @@ struct SavedSongsView: View {
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
             }
+            if duplicatesOnly, source == .liked {
+                duplicatesContent(songs)
+            } else {
             ForEach(Array(shown.enumerated()), id: \.element.id) { index, song in
                 SongRow(song: song) { player.play(shown, startAt: index) }
                     .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 12))
@@ -216,6 +227,7 @@ struct SavedSongsView: View {
                                 .tint(.orange)
                         }
                     }
+            }
             }
         }
         .listStyle(.plain)
@@ -255,8 +267,74 @@ struct SavedSongsView: View {
                     }
                 }
             }
+            if source == .liked {
+                Menu("More", systemImage: "ellipsis") {
+                    if !songs.isEmpty {
+                        Section {
+                            Button("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") { player.playNext(songs) }
+                            Button("Add to Queue", systemImage: "text.line.last.and.arrowtriangle.forward") { player.addToQueue(songs) }
+                        }
+                        Section {
+                            Button("Suggested Songs", systemImage: "sparkles") { showingSuggestions = true }
+                            if songs.count > 1 {
+                                Button(duplicatesOnly ? "Show All Songs" : "Find Duplicates",
+                                       systemImage: duplicatesOnly ? "music.note.list" : "square.on.square") {
+                                    query = ""
+                                    withAnimation { duplicatesOnly.toggle() }
+                                }
+                            }
+                        }
+                    }
+                    Section { LikedLockMenuItem() }
+                }
+            }
         }
+        .navigationDestination(isPresented: $showingSuggestions) { SuggestedSongsView() }
         .navigationTitle(title)
+    }
+
+    /// Only the liked songs that look like another, in groups; a swipe unlikes one.
+    @ViewBuilder
+    private func duplicatesContent(_ songs: [Song]) -> some View {
+        let groups = DuplicateFinder.groups(in: songs)
+        let count = groups.reduce(0) { $0 + $1.songs.count }
+        Section {
+            HStack(spacing: 12) {
+                Image(systemName: "square.on.square")
+                    .foregroundStyle(.tint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(groups.isEmpty ? "No duplicates found" : "\(count) songs in \(groups.count) \(groups.count == 1 ? "group" : "groups")")
+                        .font(.subheadline.weight(.semibold))
+                    Text(groups.isEmpty ? "No song has a twin by name." : "The same name, a name that differs by a mark such as Remix or Live, or one name inside another.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Show All") { withAnimation { duplicatesOnly = false } }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+        }
+        ForEach(groups) { group in
+            Section {
+                ForEach(group.songs) { song in
+                    SongRow(song: song) { player.play(songs, startAt: songs.firstIndex { $0.id == song.id } ?? 0) }
+                        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 12))
+                        .listRowSeparator(.hidden)
+                        .swipeActions(edge: .trailing) {
+                            Button("Unlike", systemImage: "heart.slash", role: .destructive) { library.setLiked(song, false) }
+                        }
+                }
+            } header: {
+                Label(group.kind == .same ? "Same song" : group.kind == .similar ? "Similar names" : "Possible duplicate",
+                      systemImage: group.kind == .same ? "equal.circle" : group.kind == .similar ? "plusminus.circle" : "questionmark.circle")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(nil)
+            }
+        }
     }
 }
 

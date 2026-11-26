@@ -111,7 +111,7 @@ enum IntentSongs {
     /// Liked, then recently played, then the listener's playlists; each song once.
     static func library(_ app: AppModel) -> [Song] {
         var seen = Set<String>()
-        let all = app.library.liked + app.library.recent + app.library.userPlaylists.filter { !$0.isLocked }.flatMap(\.songs)
+        let all = app.library.openLiked + app.library.recent + app.library.userPlaylists.filter { !$0.isLocked }.flatMap(\.songs)
         return all.filter { seen.insert($0.id).inserted }
     }
 
@@ -299,7 +299,7 @@ struct KodaShortcuts: AppShortcutsProvider {
 @MainActor
 enum IntentsIndex {
     static func update(_ app: AppModel) {
-        let songs = app.library.liked.prefix(500).map(SongEntity.init)
+        let songs = app.library.openLiked.prefix(500).map(SongEntity.init)
         let playlists = app.library.userPlaylists.map(PlaylistEntity.init)
         KodaShortcuts.updateAppShortcutParameters()
         Task.detached(priority: .utility) {

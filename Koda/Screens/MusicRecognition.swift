@@ -57,25 +57,34 @@ nonisolated private final class Recording: @unchecked Sendable {
     }
 }
 
+/// The block the microphone calls with its audio, on the audio thread. Made here, in a function that
+/// belongs to no actor, so it isn't checked against the main actor when the audio thread calls it.
+nonisolated private func tapBlock(feeding recording: Recording) -> AVAudioNodeTapBlock {
+    { buffer, _ in recording.append(buffer) }
+}
+
 /// Listens through the microphone for `seconds`; the audio as mono 16 kHz, samples from -1 to 1.
 nonisolated private func record(seconds: Int) async throws -> [Float] {
-    let engine = AVAudioEngine()
-    let input = engine.inputNode
-    let format = input.outputFormat(forBus: 0)
-    let recording = try Recording(from: format)
-    input.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, _ in
-        recording.append(buffer)
-    }
     let session = AVAudioSession.sharedInstance()
+    let engine = AVAudioEngine()
+    var tapped = false
     // Hands the audio back to playback as Koda had it, however this ends.
     defer {
         if engine.isRunning { engine.stop() }
-        input.removeTap(onBus: 0)
+        if tapped { engine.inputNode.removeTap(onBus: 0) }
         try? session.setCategory(.playback, mode: .default, policy: .longFormAudio)
         try? session.setActive(false, options: .notifyOthersOnDeactivation)
     }
     try session.setCategory(.record, mode: .measurement, options: .duckOthers)
     try session.setActive(true, options: .notifyOthersOnDeactivation)
+    // The microphone's format is only right once the session records: asked before, it is the
+    // playback one (or none), and a tap with a format the hardware doesn't have stops the app.
+    let input = engine.inputNode
+    let format = input.outputFormat(forBus: 0)
+    guard format.sampleRate > 0, format.channelCount > 0 else { throw RecognitionError.failed }
+    let recording = try Recording(from: format)
+    input.installTap(onBus: 0, bufferSize: 4096, format: format, block: tapBlock(feeding: recording))
+    tapped = true
     engine.prepare()
     try engine.start()
     try await Task.sleep(for: .seconds(seconds))

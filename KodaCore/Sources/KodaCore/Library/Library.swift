@@ -28,6 +28,8 @@ public final class Library {
     public private(set) var dailyListening: [String: TimeInterval] = [:]
     /// Seconds to shift synced lyrics by, per video id; positive shows lines later.
     public private(set) var lyricsOffsets: [String: TimeInterval] = [:]
+    /// Liked Songs is behind Face ID (see PlaylistLock.swift).
+    public private(set) var likedLocked = false
     /// Songs and artists the listener doesn't want offered again.
     public private(set) var notInterested = NotInterested()
     /// The artists, genres and songs picked in taste setup.
@@ -80,6 +82,14 @@ public final class Library {
     }
 
     // MARK: Songs
+
+    /// What Siri, Spotlight and search may show: nothing while Liked Songs is locked.
+    public var openLiked: [Song] { likedLocked ? [] : liked }
+
+    public func setLikedLocked(_ locked: Bool) {
+        likedLocked = locked
+        save()
+    }
 
     public func isLiked(_ song: Song) -> Bool { liked.contains { $0.id == song.id } }
 
@@ -563,6 +573,7 @@ public final class Library {
         var notInterested = NotInterested()
         var taste = TasteProfile()
         var discover = DiscoverTaste()
+        var likedLocked = false
         var watched: [Video] = []
         var videoProgress: [String: VideoProgress] = [:]
         var androidPlaysImportedThrough: Date?
@@ -586,6 +597,7 @@ public final class Library {
             notInterested = try c.decodeIfPresent(NotInterested.self, forKey: .notInterested) ?? NotInterested()
             taste = try c.decodeIfPresent(TasteProfile.self, forKey: .taste) ?? TasteProfile()
             discover = try c.decodeIfPresent(DiscoverTaste.self, forKey: .discover) ?? DiscoverTaste()
+            likedLocked = try c.decodeIfPresent(Bool.self, forKey: .likedLocked) ?? false
             watched = try c.decodeIfPresent([Video].self, forKey: .watched) ?? []
             videoProgress = try c.decodeIfPresent([String: VideoProgress].self, forKey: .videoProgress) ?? [:]
             androidPlaysImportedThrough = try c.decodeIfPresent(Date.self, forKey: .androidPlaysImportedThrough)
@@ -619,6 +631,7 @@ public final class Library {
         notInterested = snapshot.notInterested
         taste = snapshot.taste
         discover = snapshot.discover
+        likedLocked = snapshot.likedLocked
         watched = snapshot.watched
         videoProgress = snapshot.videoProgress
         androidPlaysImportedThrough = snapshot.androidPlaysImportedThrough
@@ -695,6 +708,7 @@ public final class Library {
         snapshot.notInterested = notInterested
         snapshot.taste = taste
         snapshot.discover = discover
+        snapshot.likedLocked = likedLocked
         snapshot.watched = watched
         snapshot.videoProgress = videoProgress
         snapshot.androidPlaysImportedThrough = androidPlaysImportedThrough

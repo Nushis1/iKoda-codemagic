@@ -67,7 +67,7 @@ extension Library {
         var seen = Set<String>()
         var pool: [Song] = []
         let played = songStats.values.sorted { $0.lastPlayed > $1.lastPlayed }.map(\.song)
-        for song in liked + userPlaylists.filter { !$0.isLocked }.flatMap(\.songs) + extra + recent + played where seen.insert(song.id).inserted {
+        for song in openLiked + userPlaylists.filter { !$0.isLocked }.flatMap(\.songs) + extra + recent + played where seen.insert(song.id).inserted {
             pool.append(song)
         }
         var matches = LibraryMatches()

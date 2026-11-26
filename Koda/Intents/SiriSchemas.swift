@@ -420,7 +420,7 @@ extension SchemaAudioItem {
                 return items
             case .unspecified:
                 // "Play some music": the listener's own liked songs.
-                return app.library.liked.prefix(50).map { .song(SchemaSongEntity($0)) }
+                return app.library.openLiked.prefix(50).map { .song(SchemaSongEntity($0)) }
             default:
                 return []
             }
@@ -482,7 +482,7 @@ struct SchemaAddToPlaylistIntent {
 enum SchemaIndex {
     /// The library in Spotlight's semantic index, where the new Siri looks for it.
     static func update(_ app: AppModel) {
-        let songs = app.library.liked.prefix(500).map(SchemaSongEntity.init)
+        let songs = app.library.openLiked.prefix(500).map(SchemaSongEntity.init)
         let albums = app.library.albums.map(SchemaAlbumEntity.init)
         let playlists = app.library.userPlaylists.map(SchemaPlaylistEntity.init) + app.library.playlists.map(SchemaPlaylistEntity.init)
         Task.detached(priority: .utility) {

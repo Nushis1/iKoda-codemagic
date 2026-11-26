@@ -54,4 +54,16 @@ import Testing
         library.clearDiscover()
         #expect(library.discover.isEmpty)
     }
+
+    @Test @MainActor func lockedLikedSongsAreHiddenFromSearchAndSurviveASnapshot() throws {
+        let library = Library(directory: nil)
+        library.setLiked(song("a", by: "X"), true)
+        #expect(library.openLiked.count == 1)
+        library.setLikedLocked(true)
+        #expect(library.openLiked.isEmpty)
+        #expect(library.search("a").songs.isEmpty)
+        // An older file lacks the key and starts unlocked.
+        let old = try JSONDecoder().decode(Library.Snapshot.self, from: Data("{}".utf8))
+        #expect(!old.likedLocked)
+    }
 }

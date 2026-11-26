@@ -37,7 +37,7 @@ struct KodaApp: App {
             // The queue and position survive the app being closed from the switcher.
             if phase != .active { model.saveState() }
             // Locked playlists ask again after Koda has been away; the Face ID prompt itself only makes it inactive.
-            if phase == .background { model.unlockedPlaylists = [] }
+            if phase == .background { model.unlockedPlaylists = []; model.likedUnlocked = false }
             // The copy that survives deleting the app is made as Koda leaves the screen (iPhone only).
             if phase == .background, !Platform.isMac { model.automaticBackup.save() }
             if phase == .active {
